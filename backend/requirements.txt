@@ -27,5 +27,8 @@ stripe==7.4.0
 # Background Jobs
 apscheduler==3.10.4
 
+# Image Processing
+Pillow==10.1.0
+
 # Email
 python-dotenv==1.0.0
