@@ -4,7 +4,7 @@ Loads environment variables and provides configuration settings
 """
 from typing import List, Optional
 from pydantic_settings import BaseSettings
-from pydantic import AnyHttpUrl, validator
+from pydantic import validator
 
 
 class Settings(BaseSettings):
@@ -38,11 +38,13 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # CORS
-    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []
+    BACKEND_CORS_ORIGINS: List[str] = ["*"]
     
     @validator("BACKEND_CORS_ORIGINS", pre=True)
     def assemble_cors_origins(cls, v):
         if isinstance(v, str):
+            if v == "*":
+                return ["*"]
             return [i.strip() for i in v.split(",")]
         return v
     
