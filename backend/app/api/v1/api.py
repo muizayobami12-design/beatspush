@@ -2,7 +2,7 @@
 API v1 Router - Combines all endpoint routers
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, users, profiles, tracks, ai, campaigns, promo_links, analytics, tips, bookings, beats, social, messaging, websocket, fan_clubs, webhooks
+from app.api.v1.endpoints import auth, users, profiles, tracks, ai, campaigns, promo_links, analytics, tips, bookings, beats, social, messaging, websocket, fan_clubs, webhooks, test_email
 
 api_router = APIRouter()
 
@@ -23,6 +23,7 @@ api_router.include_router(messaging.router)
 api_router.include_router(websocket.router)
 api_router.include_router(fan_clubs.router)
 api_router.include_router(webhooks.router)
+api_router.include_router(test_email.router)  # Test endpoint for debugging
 
 # Future routers will be added here:
 # api_router.include_router(playlists.router)
