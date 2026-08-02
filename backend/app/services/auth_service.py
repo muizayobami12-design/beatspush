@@ -27,6 +27,7 @@ from app.core.security import (
     verify_email_verification_token
 )
 from app.core.config import settings
+from app.services.email_service import EmailService
 
 
 class AuthService:
@@ -87,9 +88,13 @@ class AuthService:
         # Generate tokens
         tokens = AuthService._generate_tokens(new_user)
         
-        # TODO: Send verification email
-        # verification_token = create_email_verification_token(new_user.email)
-        # send_verification_email(new_user.email, verification_token)
+        # Send verification email
+        try:
+            verification_token = create_email_verification_token(new_user.email)
+            EmailService.send_verification_email(new_user.email, verification_token)
+        except Exception as e:
+            # Log error but don't fail registration
+            print(f"Failed to send verification email: {e}")
         
         return AuthResponse(
             user=UserResponse.from_orm(new_user),
@@ -255,13 +260,16 @@ class AuthService:
         # Generate reset token
         reset_token = create_password_reset_token(email)
         
-        # TODO: Send password reset email
-        # send_password_reset_email(email, reset_token)
+        # Send password reset email
+        try:
+            EmailService.send_password_reset_email(email, reset_token)
+        except Exception as e:
+            # Log error but don't expose to user
+            print(f"Failed to send password reset email: {e}")
         
         return {
             "message": "If that email exists, a password reset link has been sent",
-            "success": True,
-            "token": reset_token  # Only for development - remove in production!
+            "success": True
         }
     
     @staticmethod
