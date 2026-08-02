@@ -174,7 +174,7 @@ def create_password_reset_token(email: str) -> str:
         "type": "password_reset"
     }
     
-    expire = datetime.utcnow() + timedelta(hours=1)  # Reset tokens expire in 1 hour
+    expire = datetime.utcnow() + timedelta(minutes=10)  # Reset tokens expire in 10 minutes
     data.update({"exp": expire})
     
     token = jwt.encode(

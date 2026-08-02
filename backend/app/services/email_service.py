@@ -110,7 +110,7 @@ class EmailService:
             </div>
             <p>Or copy and paste this link into your browser:</p>
             <p style="word-break: break-all; background: white; padding: 10px; border-radius: 5px;">{reset_link}</p>
-            <p><strong>This link will expire in 1 hour.</strong></p>
+            <p><strong>This link will expire in 10 minutes.</strong></p>
             <p>If you didn't request a password reset, you can safely ignore this email.</p>
         </div>
         <div class="footer">
@@ -131,7 +131,7 @@ We received a request to reset your password. Click the link below to create a n
 
 {reset_link}
 
-This link will expire in 1 hour.
+This link will expire in 10 minutes.
 
 If you didn't request a password reset, you can safely ignore this email.
 
