@@ -23,6 +23,7 @@ from app.schemas.messaging import (
 from app.services.messaging_service import MessagingService
 from app.services.privacy_service import PrivacyService
 from app.services.file_attachment_service import FileAttachmentService
+from app.services.notification_service import NotificationService
 from app.services.websocket_manager import connection_manager
 
 router = APIRouter(prefix="/messaging", tags=["Messaging"])
@@ -295,39 +296,16 @@ async def send_message(
     
     # Create notification for offline/inactive recipients
     try:
-        from app.services.notification_service import NotificationService
-        notification_service = NotificationService(db)
+        from app.services.messaging_notification_helpers import create_message_notification
         
         for participant_id in participant_ids:
             # Skip sender
             if participant_id == current_user.id:
                 continue
             
-            # Check if recipient is online and viewing the conversation
-            is_viewing = connection_manager.is_user_viewing_conversation(
-                participant_id,
-                message.conversation_id
-            )
-            
-            # Only send notification if recipient is not actively viewing
-            if not is_viewing:
-                # Create message preview (first 50 chars)
-                preview = message.content[:50]
-                if len(message.content) > 50:
-                    preview += "..."
-                
-                notification_service.create_notification(
-                    user_id=participant_id,
-                    notification_type="new_message",
-                    title=f"New message from @{current_user.username}",
-                    message=preview,
-                    data={
-                        "sender_id": current_user.id,
-                        "sender_username": current_user.username,
-                        "conversation_id": message.conversation_id,
-                        "message_id": message.id
-                    }
-                )
+            # Use helper function to create notification
+            # Handles: preference checking, active conversation checking, and preview generation
+            create_message_notification(message, participant_id, db)
     except Exception as e:
         # Log error but don't block message sending
         print(f"⚠️ Notification creation failed: {e}")
@@ -622,6 +600,48 @@ async def get_unread_count(
     return result
 
 
+@router.get("/conversations/{conversation_id}/poll", response_model=MessageListResponse)
+async def poll_messages(
+    conversation_id: str,
+    since: Optional[str] = Query(None, description="ISO timestamp to get messages since"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Polling fallback for clients without WebSocket support.
+    
+    Returns new messages since a given timestamp, plus active typing users.
+    Use this as a fallback when WebSocket connection is unavailable.
+    
+    **Parameters:**
+    - `since`: ISO 8601 timestamp (e.g., 2024-01-01T00:00:00Z) - returns messages after this time
+    
+    **Returns:**
+    - Messages since the given timestamp (or last 20 if no timestamp)
+    - `has_more`: whether there are more messages
+    - `next_cursor`: cursor for the next poll request
+    """
+    messaging_service = MessagingService(db)
+    
+    if since:
+        # Get messages since timestamp
+        result = messaging_service.get_messages_since(
+            conversation_id=conversation_id,
+            user_id=current_user.id,
+            since_timestamp=since
+        )
+    else:
+        # Fall back to getting latest messages
+        result = messaging_service.get_messages(
+            conversation_id=conversation_id,
+            user_id=current_user.id,
+            page=1,
+            page_size=20
+        )
+    
+    return MessageListResponse(**result)
+
+
 # ============================================================================
 # WAVE 10: MESSAGE REQUEST ENDPOINTS
 # ============================================================================
@@ -708,7 +728,42 @@ async def accept_message_request(
         user_id=current_user.id
     )
     
-    # TODO: Notify sender via notification service
+    # Notify sender that request was accepted
+    try:
+        from app.services.messaging_notification_helpers import create_message_request_notification
+        
+        # Get the sender (other participant in the message request)
+        from app.models.messaging import ConversationParticipant
+        
+        sender_id = None
+        participants = (
+            db.query(ConversationParticipant)
+            .filter(ConversationParticipant.conversation_id == conversation_id)
+            .all()
+        )
+        
+        for participant in participants:
+            if participant.user_id != current_user.id:
+                sender_id = participant.user_id
+                break
+        
+        if sender_id:
+            # Notify sender of acceptance
+            notification_service = NotificationService(db)
+            notification_service.create_notification(
+                user_id=sender_id,
+                notification_type="message_request_accepted",
+                title=f"{current_user.username} accepted your message request",
+                message="You can now message each other",
+                data={
+                    "user_id": current_user.id,
+                    "username": current_user.username,
+                    "conversation_id": conversation_id
+                }
+            )
+    except Exception as e:
+        # Log error but don't block acceptance
+        print(f"⚠️ Error notifying sender: {e}")
     
     messaging_service = MessagingService(db)
     conv_response = messaging_service._build_conversation_response(

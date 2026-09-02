@@ -5,9 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.models.user import User
-from app.core.dependencies import get_current_user
-from app.ai.ai_service import AIService
+from app.models.user import User, UserTier
+from app.core.dependencies import get_current_user, get_ai_service, get_rate_limiter
+from app.ai.ai_service import AIService as OldAIService  # Legacy service
+from app.ai.ai_service_new import AIService
+from app.ai.providers.base import AIRequestType
+from app.core.rate_limiting import AIRateLimiter, UserTier as RateLimitUserTier
 from app.schemas.ai import (
     GenerateCaptionRequest,
     GenerateCaptionResponse,
@@ -20,10 +23,137 @@ from app.schemas.ai import (
     PostingTimesResponse,
     PostingTimeSuggestion,
     GenerateBioRequest,
-    BioResponse
+    BioResponse,
+    AIGenerateRequest,
+    AIGenerateResponse,
+    ResponseMetadata,
+    QuotaInfo
 )
 
 router = APIRouter(prefix="/ai", tags=["AI Content Generation"])
+
+
+@router.post("/generate", response_model=AIGenerateResponse)
+async def generate_ai_content(
+    request: AIGenerateRequest,
+    current_user: User = Depends(get_current_user),
+    ai_service: AIService = Depends(get_ai_service),
+    rate_limiter: AIRateLimiter = Depends(get_rate_limiter),
+    db: Session = Depends(get_db)
+):
+    """
+    **Unified AI Content Generation Endpoint**
+    
+    Generate any type of AI content with rate limiting and caching.
+    
+    **Request Types:**
+    - `title` - Generate beat titles
+    - `description` - Generate beat descriptions
+    - `caption` - Generate social media captions
+    - `hashtags` - Generate hashtags
+    - `press_release` - Generate press releases
+    - `campaign_suggestions` - Get campaign optimization tips
+    - `genre_tags` - Suggest genre and mood tags
+    - `audience_insights` - Get target audience insights
+    
+    **Free Tier:** 20 requests/day  
+    **Premium Tier:** Unlimited requests
+    
+    **Example:**
+    ```json
+    {
+      "request_type": "title",
+      "params": {
+        "genre": "afrobeats",
+        "mood": "energetic",
+        "bpm": 120
+      }
+    }
+    ```
+    """
+    # Convert user tier to rate limiter tier (default to FREE if None)
+    user_tier = RateLimitUserTier.PREMIUM if (hasattr(current_user, 'tier') and current_user.tier == UserTier.PREMIUM) else RateLimitUserTier.FREE
+    
+    # Check rate limit
+    quota_status = await rate_limiter.check_and_increment(
+        user_id=int(current_user.id) if isinstance(current_user.id, str) else current_user.id,
+        user_tier=user_tier
+    )
+    
+    if not quota_status.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "message": "Daily quota exceeded",
+                "quota": {
+                    "tier": quota_status.tier.value,
+                    "remaining": 0,
+                    "reset_at": quota_status.reset_at.isoformat() if quota_status.reset_at else None
+                },
+                "upgrade_url": "/pricing"
+            }
+        )
+    
+    # Validate request type
+    try:
+        request_type_enum = AIRequestType(request.request_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid request_type. Must be one of: {[t.value for t in AIRequestType]}"
+        )
+    
+    # Generate content
+    try:
+        result = await ai_service.generate(
+            request_type=request_type_enum,
+            params=request.params,
+            user_id=int(current_user.id) if isinstance(current_user.id, str) else current_user.id,
+            bypass_cache=request.bypass_cache
+        )
+        
+        return AIGenerateResponse(
+            success=result["success"],
+            content=result["content"],
+            metadata=ResponseMetadata(**result["metadata"]),
+            quota=QuotaInfo(
+                tier=quota_status.tier.value,
+                remaining=quota_status.remaining,
+                reset_at=quota_status.reset_at.isoformat() if quota_status.reset_at else None
+            )
+        )
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"AI service error: {str(e)}"
+        )
+
+
+@router.get("/quota")
+async def get_quota_status(
+    current_user: User = Depends(get_current_user),
+    rate_limiter: AIRateLimiter = Depends(get_rate_limiter)
+):
+    """
+    Get current AI quota status
+    
+    Returns remaining requests and reset time for free-tier users.
+    Premium users see "unlimited".
+    """
+    user_tier = RateLimitUserTier.PREMIUM if (hasattr(current_user, 'tier') and current_user.tier == UserTier.PREMIUM) else RateLimitUserTier.FREE
+    
+    quota_status = await rate_limiter.get_quota_info(
+        user_id=current_user.id,  # Keep as string UUID
+        user_tier=user_tier
+    )
+    
+    return {
+        "tier": quota_status.tier.value,
+        "remaining": quota_status.remaining,
+        "reset_at": quota_status.reset_at.isoformat() if quota_status.reset_at else None,
+        "allowed": quota_status.allowed
+    }
 
 
 @router.post("/generate-captions", response_model=GenerateCaptionResponse)

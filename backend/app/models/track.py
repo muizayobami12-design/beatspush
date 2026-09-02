@@ -101,6 +101,7 @@ class Track(Base):
     # Relationships
     user = relationship("User", backref="tracks")
     promo_links = relationship("PromoLink", back_populates="track", cascade="all, delete-orphan", lazy="select")
+    posts = relationship("Post", back_populates="track")
     
     def __repr__(self):
         return f"<Track {self.title} by {self.artist_name}>"

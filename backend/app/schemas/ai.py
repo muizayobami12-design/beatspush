@@ -99,3 +99,38 @@ class BioResponse(BaseModel):
     short: str = Field(..., description="Short bio (50-75 words)")
     medium: str = Field(..., description="Medium bio (150-200 words)")
     detailed: str = Field(..., description="Detailed bio (300-400 words)")
+
+
+
+# ============================================================================
+# UNIFIED AI GENERATION SCHEMAS
+# ============================================================================
+
+class AIGenerateRequest(BaseModel):
+    """Unified AI generation request"""
+    request_type: str = Field(..., description="Type of content (title, description, caption, hashtags, etc.)")
+    params: Dict = Field(..., description="Generation parameters")
+    bypass_cache: bool = Field(False, description="Skip cache lookup")
+
+
+class ResponseMetadata(BaseModel):
+    """Response metadata"""
+    provider: str = Field(..., description="AI provider used")
+    model: str = Field(..., description="Model used")
+    response_time_ms: int = Field(..., description="Response time in milliseconds")
+    cached: bool = Field(..., description="Whether response was cached")
+
+
+class QuotaInfo(BaseModel):
+    """User quota information"""
+    tier: str = Field(..., description="User tier (free/premium)")
+    remaining: Optional[int] = Field(None, description="Remaining requests (None for premium)")
+    reset_at: Optional[str] = Field(None, description="Quota reset time (None for premium)")
+
+
+class AIGenerateResponse(BaseModel):
+    """Unified AI generation response"""
+    success: bool = Field(..., description="Whether generation succeeded")
+    content: Dict = Field(..., description="Generated content")
+    metadata: ResponseMetadata = Field(..., description="Response metadata")
+    quota: Optional[QuotaInfo] = Field(None, description="Quota information")

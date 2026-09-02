@@ -1,675 +1,869 @@
 """
-Analytics API Endpoints
-Task 4.2: Unified Analytics Dashboard
+Analytics endpoints for fan club system.
 
-Endpoints for viewing comprehensive analytics and insights
+Provides:
+- MRR, ARPU, LTV calculations
+- Revenue trends and forecasts
+- Churn analysis and retention cohorts
+- Engagement metrics
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+import logging
+from datetime import datetime, date
+from typing import Optional
+from decimal import Decimal
+
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import Optional, List
 
 from app.core.dependencies import get_db, get_current_user
-from app.models.user import User, UserRole
-from app.services.analytics_service import AnalyticsService
-from app.schemas.analytics import (
-    AnalyticsDashboardResponse,
-    TrackAnalyticsResponse,
-    OverviewStats,
-    TrackPerformance,
-    PlatformStats,
-    GeographicStats,
-    EngagementTimeline,
-    # Task 4.3: Track Performance Analytics schemas
-    TrackPerformanceResponse,
-    TrackComparisonResponse,
-    TrackGrowthTrendsResponse,
-    TrackRankingsResponse,
-    # Task 4.4: Audience Analytics schemas
-    AudienceDemographicsResponse,
-    FanSegmentsResponse,
-    AudienceGrowthResponse,
-    RetentionMetricsResponse,
-    AudienceInsightsResponse,
+from app.core.cache import CacheManager
+from app.models.user import User
+from app.models.fan_club import FanClub
+from app.services.analytics_service_cached import CachedAnalyticsService
+from app.schemas.fan_club import (
+    MRRResponse,
+    ARPUResponse,
+    LTVResponse,
+    RevenueTrendResponse,
+    ChurnRateResponse,
+    ChurnReasonsResponse,
+    RetentionCohortResponse,
+    RetentionMatrixResponse,
+    ForecastResponse,
+    CreatorMetricsResponse,
+    FanClubMetricsResponse,
+    SubscriberActivityResponse
 )
 
-router = APIRouter(prefix="/analytics", tags=["Analytics"])
+router = APIRouter(prefix="/analytics", tags=["analytics"])
+logger = logging.getLogger(__name__)
 
 
-# ================== DASHBOARD ==================
+# ==================== PERMISSION HELPERS ====================
 
-@router.get("/dashboard", response_model=AnalyticsDashboardResponse)
-def get_analytics_dashboard(
-    days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+def verify_fan_club_access(
+    fan_club_id: int,
+    user: User,
+    db: Session
+):
+    """Verify user has access to fan club analytics."""
+    fan_club = db.query(FanClub).filter(FanClub.id == fan_club_id).first()
+    
+    if not fan_club:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Fan club not found"
+        )
+    
+    # Only creator can access their fan club analytics
+    if fan_club.creator_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+    
+    return fan_club
+
+
+# ==================== REVENUE ENDPOINTS ====================
+
+@router.get(
+    "/revenue/mrr",
+    response_model=MRRResponse,
+    summary="Get Monthly Recurring Revenue"
+)
+async def get_mrr(
+    fan_club_id: int = Query(...),
+    month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
-    Get unified analytics dashboard for the current user.
+    Calculate Monthly Recurring Revenue (MRR) for a fan club.
     
-    **Returns:**
-    - Overview stats (tracks, plays, likes, campaigns, promo links)
-    - Top 5 performing tracks
-    - Platform breakdown
-    - Geographic distribution
-    - Engagement timeline (30 days)
-    - AI-generated insights
+    MRR = Sum of all active subscription amounts in a month
     
     **Parameters:**
-    - `days`: Number of days to analyze (default: 30)
-    
-    **Use this for:**
-    - Main analytics page
-    - Performance overview
-    - Quick insights
-    """
-    
-    # Get overview stats
-    overview_data = AnalyticsService.get_overview_stats(db, current_user.id, days)
-    overview = OverviewStats(**overview_data)
-    
-    # Get top tracks
-    top_tracks_data = AnalyticsService.get_top_tracks(db, current_user.id, limit=5)
-    top_tracks = [TrackPerformance(**track) for track in top_tracks_data]
-    
-    # Get platform stats
-    platform_stats_data = AnalyticsService.get_platform_stats(db, current_user.id)
-    platform_stats = [PlatformStats(**stat) for stat in platform_stats_data]
-    
-    # Get geographic stats
-    geographic_data = AnalyticsService.get_geographic_stats(db, current_user.id, limit=10)
-    geographic_stats = [GeographicStats(**geo) for geo in geographic_data]
-    
-    # Get engagement timeline
-    timeline_data = AnalyticsService.get_engagement_timeline(db, current_user.id, days)
-    engagement_timeline = EngagementTimeline(**timeline_data)
-    
-    # Generate insights
-    insights = AnalyticsService.generate_insights(db, current_user.id)
-    
-    return AnalyticsDashboardResponse(
-        overview=overview,
-        top_tracks=top_tracks,
-        platform_stats=platform_stats,
-        geographic_stats=geographic_stats,
-        engagement_timeline=engagement_timeline,
-        insights=insights
-    )
-
-
-# ================== TRACK ANALYTICS ==================
-
-# NOTE: Specific routes must come before parametrized routes to avoid conflicts
-@router.get("/tracks/rankings", response_model=TrackRankingsResponse)
-def get_track_rankings(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Get rankings of all user's tracks by various metrics.
-    
-    **Rankings By:**
-    - Plays (most played tracks)
-    - Engagement (best engagement rate)
-    - Revenue (highest earning tracks)
+    - fan_club_id: Fan club ID
+    - month: Target month (optional, defaults to current month)
     
     **Returns:**
-    - Top 10 tracks in each category
-    - Track metrics and rankings
-    - Total track count
+    - mrr: Total MRR amount
+    - active_subscriptions: Number of active subscriptions
+    - breakdown: Revenue by tier
     
-    **Use this for:**
-    - Portfolio overview
-    - Identifying top performers
-    - Understanding what works
-    - Resource allocation decisions
+    **Caching:** 1 hour TTL (automatically cached)
     """
-    try:
-        rankings = AnalyticsService.get_user_track_rankings(db, current_user.id)
-        return TrackRankingsResponse(**rankings)
+    # Verify access
+    verify_fan_club_access(fan_club_id, current_user, db)
     
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get track rankings: {str(e)}")
+    # Parse month if provided
+    start_date = None
+    if month:
+        try:
+            start_date = datetime.strptime(month, '%Y-%m').date()
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid month format, use YYYY-MM"
+            )
+    
+    analytics = CachedCachedAnalyticsService(db)
+    mrr_data = analytics.get_mrr(start_date, fan_club_id=fan_club_id)
+    
+    return MRRResponse(**mrr_data)
 
 
-@router.get("/tracks/{track_id}", response_model=TrackAnalyticsResponse)
-def get_track_analytics(
-    track_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+@router.get(
+    "/revenue/arpu",
+    response_model=ARPUResponse,
+    summary="Get Average Revenue Per User"
+)
+async def get_arpu(
+    fan_club_id: int = Query(...),
+    days: int = Query(30, ge=7, le=365),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
-    Get detailed analytics for a specific track.
+    Calculate Average Revenue Per User (ARPU).
     
-    **Returns:**
-    - Track performance metrics
-    - Promo link performance
-    - Platform breakdown
-    - Geographic distribution
-    - Time series data
-    - Track-specific insights
-    
-    **Use this for:**
-    - Individual track analytics page
-    - Deep dive into track performance
-    - Promo link effectiveness
-    """
-    
-    analytics_data = AnalyticsService.get_track_analytics(db, track_id, current_user.id)
-    
-    if not analytics_data:
-        raise HTTPException(status_code=404, detail="Track not found or access denied")
-    
-    return TrackAnalyticsResponse(**analytics_data)
-
-
-# ================== OVERVIEW ONLY ==================
-
-@router.get("/overview", response_model=OverviewStats)
-def get_overview_stats(
-    days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Get overview statistics only (lightweight endpoint).
-    
-    **Returns:** Overview cards data only
-    
-    **Use this for:**
-    - Dashboard summary cards
-    - Quick stats refresh
-    - Mobile apps (lighter payload)
-    """
-    
-    overview_data = AnalyticsService.get_overview_stats(db, current_user.id, days)
-    return OverviewStats(**overview_data)
-
-
-# ================== TOP TRACKS ==================
-
-@router.get("/top-tracks")
-def get_top_tracks(
-    limit: int = Query(10, ge=1, le=50, description="Number of tracks to return"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Get top performing tracks.
+    ARPU = Total Revenue / Active Subscribers
     
     **Parameters:**
-    - `limit`: Number of tracks (1-50, default: 10)
+    - fan_club_id: Fan club ID
+    - days: Period in days (default: 30)
     
-    **Returns:** List of top tracks by performance score
+    **Returns:**
+    - arpu: Average revenue per user
+    - total_revenue: Total revenue in period
+    - active_users: Number of active users
     """
+    verify_fan_club_access(fan_club_id, current_user, db)
     
-    tracks_data = AnalyticsService.get_top_tracks(db, current_user.id, limit)
-    return [TrackPerformance(**track) for track in tracks_data]
+    start_date = date.fromordinal(date.today().toordinal() - days)
+    
+    analytics = CachedCachedAnalyticsService(db)
+    arpu_data = analytics.get_arpu(start_date, fan_club_id=fan_club_id)
+    
+    return ARPUResponse(**arpu_data)
 
 
-# ================== PLATFORM STATS ==================
-
-@router.get("/platforms")
-def get_platform_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+@router.get(
+    "/revenue/ltv",
+    response_model=LTVResponse,
+    summary="Get Lifetime Value"
+)
+async def get_ltv(
+    fan_club_id: int = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
-    Get platform performance breakdown.
+    Calculate Lifetime Value (LTV) per subscriber.
     
-    **Returns:** Click distribution across platforms (Spotify, Apple Music, etc.)
-    
-    **Use this for:**
-    - Platform comparison charts
-    - Understanding audience platform preferences
-    """
-    
-    stats_data = AnalyticsService.get_platform_stats(db, current_user.id)
-    return [PlatformStats(**stat) for stat in stats_data]
-
-
-# ================== GEOGRAPHIC STATS ==================
-
-@router.get("/geographic")
-def get_geographic_stats(
-    limit: int = Query(10, ge=1, le=50, description="Number of countries to return"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Get geographic distribution.
+    LTV = ARPU × Average Customer Lifespan
     
     **Parameters:**
-    - `limit`: Number of countries (1-50, default: 10)
+    - fan_club_id: Fan club ID
     
-    **Returns:** Top countries by click count
-    
-    **Use this for:**
-    - Geographic heatmaps
-    - Understanding audience location
-    - Targeting campaigns
+    **Returns:**
+    - ltv: Lifetime value per subscriber
+    - avg_arpu: Average revenue per user
+    - avg_lifetime_months: Average subscription duration
+    - sample_size: Number of subscriptions analyzed
     """
+    verify_fan_club_access(fan_club_id, current_user, db)
     
-    geo_data = AnalyticsService.get_geographic_stats(db, current_user.id, limit)
-    return [GeographicStats(**geo) for geo in geo_data]
+    analytics = CachedAnalyticsService(db)
+    ltv_data = analytics.get_ltv(fan_club_id=fan_club_id)
+    
+    return LTVResponse(**ltv_data)
 
 
-# ================== ENGAGEMENT TIMELINE ==================
-
-@router.get("/timeline", response_model=EngagementTimeline)
-def get_engagement_timeline(
-    days: int = Query(30, ge=7, le=365, description="Number of days"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+@router.get(
+    "/revenue/trend",
+    response_model=RevenueTrendResponse,
+    summary="Get Revenue Trend"
+)
+async def get_revenue_trend(
+    fan_club_id: int = Query(...),
+    months: int = Query(12, ge=3, le=36),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
-    Get engagement timeline for charts.
+    Get monthly revenue trend for N months.
     
     **Parameters:**
-    - `days`: Number of days (7-365, default: 30)
-    
-    **Returns:** Time series data for plays, likes, shares, clicks
-    
-    **Use this for:**
-    - Line charts
-    - Trend analysis
-    - Performance over time
-    """
-    
-    timeline_data = AnalyticsService.get_engagement_timeline(db, current_user.id, days)
-    return EngagementTimeline(**timeline_data)
-
-
-# ================== INSIGHTS ==================
-
-@router.get("/insights")
-def get_insights(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Get AI-generated insights and recommendations.
-    
-    **Returns:** List of actionable insights based on user data
-    
-    **Use this for:**
-    - Dashboard notifications
-    - Tips and suggestions
-    - Performance highlights
-    """
-    
-    insights = AnalyticsService.generate_insights(db, current_user.id)
-    return {"insights": insights}
-
-
-
-# ================== TRACK PERFORMANCE ANALYTICS (Task 4.3) ==================
-
-@router.get("/track/{track_id}/performance", response_model=TrackPerformanceResponse)
-def get_track_performance(
-    track_id: str,
-    days: int = Query(30, ge=7, le=365, description="Number of days"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Get detailed performance analytics for a specific track.
-    
-    **Authorization:** Must be the track owner
-    
-    **Metrics:**
-    - Total plays, likes, shares, downloads
-    - Performance score (weighted metric)
-    - Tips revenue
-    - Promo link clicks
-    
-    **Breakdown:**
-    - Platform breakdown (Spotify, Apple Music, YouTube, etc.)
-    - Geographic distribution (top countries)
-    - Engagement timeline (daily data)
-    - Playlist adds (algorithmic, editorial, user)
-    - Listener demographics (age, gender)
-    
-    **Use this for:**
-    - Individual track analysis
-    - Understanding audience
-    - Identifying best platforms
-    - Geographic targeting
-    
-    **Returns:** Comprehensive track performance data
-    """
-    try:
-        performance = AnalyticsService.get_track_performance(db, track_id, current_user.id, days)
-        return TrackPerformanceResponse(**performance)
-    
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get track performance: {str(e)}")
-
-
-@router.post("/tracks/compare", response_model=TrackComparisonResponse)
-def compare_tracks(
-    track_ids: List[str] = Body(..., description="List of track IDs to compare (max 5)"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Compare performance of multiple tracks.
-    
-    **Authorization:** Must own all tracks
-    
-    **Limit:** Max 5 tracks at once
-    
-    **Comparison Metrics:**
-    - Plays, likes, shares, downloads
-    - Performance score
-    - Revenue
-    - Engagement rate
-    - Rankings
+    - fan_club_id: Fan club ID
+    - months: Number of months (default: 12)
     
     **Returns:**
-    - Side-by-side comparison
-    - Best performer
-    - Total aggregates
-    
-    **Use this for:**
-    - A/B testing content styles
-    - Identifying successful patterns
-    - Portfolio analysis
+    - data: List of monthly revenue data
+    - currency: Currency code
     """
-    try:
-        comparison = AnalyticsService.compare_tracks(db, current_user.id, track_ids)
-        return TrackComparisonResponse(**comparison)
+    verify_fan_club_access(fan_club_id, current_user, db)
     
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to compare tracks: {str(e)}")
+    analytics = CachedAnalyticsService(db)
+    trend = analytics.get_revenue_trend(months, fan_club_id=fan_club_id)
+    
+    return RevenueTrendResponse(data=trend)
 
 
-@router.get("/track/{track_id}/growth", response_model=TrackGrowthTrendsResponse)
-def get_track_growth_trends(
-    track_id: str,
-    days: int = Query(90, ge=30, le=365, description="Number of days"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+# ==================== CHURN ENDPOINTS ====================
+
+@router.get(
+    "/churn/rate",
+    response_model=ChurnRateResponse,
+    summary="Get Monthly Churn Rate"
+)
+async def get_churn_rate(
+    fan_club_id: int = Query(...),
+    month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
-    Get growth trends for a track over time.
+    Calculate monthly churn rate.
     
-    **Authorization:** Must be the track owner
+    Churn Rate = Cancelled / Beginning Subscribers × 100%
     
-    **Period:** 30-365 days (default: 90 days)
-    
-    **Metrics:**
-    - Weekly breakdown (plays, likes, shares, new listeners)
-    - Growth rate percentage
-    - Trend direction (growing/stable/declining)
-    - Peak week identification
-    
-    **Use this for:**
-    - Tracking momentum
-    - Identifying viral moments
-    - Understanding lifecycle
-    - Planning promotion timing
-    
-    **Returns:** Weekly growth data and trends
-    """
-    try:
-        trends = AnalyticsService.get_track_growth_trends(db, track_id, current_user.id, days)
-        return TrackGrowthTrendsResponse(**trends)
-    
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get growth trends: {str(e)}")
-
-
-
-
-# ================== AUDIENCE ANALYTICS (Task 4.4) ==================
-
-@router.get("/audience/demographics", response_model=AudienceDemographicsResponse)
-def get_audience_demographics(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Get comprehensive audience demographics.
-    
-    **Authorization:** Requires authentication
+    **Parameters:**
+    - fan_club_id: Fan club ID
+    - month: Target month (optional, defaults to last month)
     
     **Returns:**
-    - Total listener count
-    - Age distribution (6 age groups)
-    - Gender breakdown
-    - Geographic distribution (top 15 countries)
-    - Device usage (mobile, desktop, tablet)
-    - Platform preferences (Spotify, Apple Music, etc.)
-    
-    **Data Sources:**
-    - Promo link clicks (geographic data)
-    - Platform analytics (simulated, ready for real API integration)
-    - Listener tracking from plays
-    
-    **Use this for:**
-    - Understanding your audience composition
-    - Targeting campaigns effectively
-    - Making content decisions
-    - Planning tours and events
+    - churn_rate: Percentage of churned subscribers
+    - churned_subscribers: Number of cancellations
+    - beginning_subscribers: Subscribers at month start
+    - ending_subscribers: Subscribers at month end
     """
-    try:
-        demographics = AnalyticsService.get_audience_demographics(db, current_user.id)
-        return AudienceDemographicsResponse(**demographics)
+    verify_fan_club_access(fan_club_id, current_user, db)
     
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get audience demographics: {str(e)}")
+    target_month = None
+    if month:
+        try:
+            target_month = datetime.strptime(month, '%Y-%m').date()
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid month format, use YYYY-MM"
+            )
+    
+    analytics = CachedAnalyticsService(db)
+    churn_data = analytics.get_churn_rate(target_month, fan_club_id=fan_club_id)
+    
+    return ChurnRateResponse(**churn_data)
 
 
-@router.get("/audience/segments", response_model=FanSegmentsResponse)
-def get_fan_segments(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+@router.get(
+    "/churn/reasons",
+    response_model=ChurnReasonsResponse,
+    summary="Get Churn Reasons"
+)
+async def get_churn_reasons(
+    fan_club_id: int = Query(...),
+    limit: int = Query(10, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
-    Get fan segmentation based on engagement levels.
+    Get most common churn reasons.
     
-    **Authorization:** Requires authentication
-    
-    **Fan Segments:**
-    - **Super Fans:** Top 5% most engaged listeners
-      - Listen 10+ times per track
-      - High engagement score (95)
-      - Likely to share and promote
-    
-    - **New Listeners:** Discovered in last 30 days
-      - 25% of audience
-      - Average 2 plays per track
-      - Conversion opportunity
-    
-    - **Casual Listeners:** Occasional listeners
-      - 60% of audience
-      - Moderate engagement
-      - Growth potential
-    
-    - **At-Risk:** Previously active, now declining
-      - 10% of audience
-      - Need re-engagement
-      - Risk of churn
+    **Parameters:**
+    - fan_club_id: Fan club ID
+    - limit: Max reasons to return (default: 10)
     
     **Returns:**
-    - Counts and percentages for each segment
-    - Engagement scores
-    - Average plays per track
-    - Actionable insights
-    
-    **Use this for:**
-    - Targeted re-engagement campaigns
-    - Reward programs for super fans
-    - Converting casual to engaged listeners
-    - Preventing churn
+    - reasons: List of cancellation reasons with counts
+    - total_churned: Total number of churned subscribers
     """
-    try:
-        segments = AnalyticsService.get_fan_segments(db, current_user.id)
-        return FanSegmentsResponse(**segments)
+    verify_fan_club_access(fan_club_id, current_user, db)
     
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get fan segments: {str(e)}")
+    analytics = CachedAnalyticsService(db)
+    reasons = analytics.get_churn_reasons(limit, fan_club_id)
+    
+    total_churned = sum(r['count'] for r in reasons)
+    
+    return ChurnReasonsResponse(reasons=reasons, total_churned=total_churned)
 
 
-@router.get("/audience/growth", response_model=AudienceGrowthResponse)
-def get_audience_growth(
-    days: int = Query(90, ge=30, le=365, description="Number of days to analyze"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+# ==================== RETENTION ENDPOINTS ====================
+
+@router.get(
+    "/retention/cohort",
+    response_model=RetentionCohortResponse,
+    summary="Get Retention Cohort"
+)
+async def get_retention_cohort(
+    fan_club_id: int = Query(...),
+    month: str = Query(..., description="Cohort month in YYYY-MM format"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
-    Track audience growth over time.
+    Calculate retention cohort for subscribers started in a month.
     
-    **Authorization:** Requires authentication
+    Shows what % of subscribers from a month are still active after N months.
     
-    **Query Parameters:**
-    - `days`: Analysis period (30-365 days, default: 90)
+    **Parameters:**
+    - fan_club_id: Fan club ID
+    - month: Cohort month in YYYY-MM format
     
     **Returns:**
-    - Current audience size
-    - Weekly growth data points
-    - Growth rate percentage
-    - Net new listeners
-    - Average daily growth
-    - Trend classification (growing, stable, declining)
-    
-    **Each Week Shows:**
-    - Audience size at week end
-    - New listeners acquired
-    - Churned listeners (stopped listening)
-    - Net growth (new - churned)
-    
-    **Growth Rate Calculation:**
-    - Compares recent 4 weeks to previous 4 weeks
-    - Positive = growing audience
-    - Negative = declining audience
-    
-    **Use this for:**
-    - Monitoring growth trajectory
-    - Evaluating campaign effectiveness
-    - Setting growth targets
-    - Identifying growth inflection points
+    - cohort_month: Month of cohort
+    - cohort_size: Number of subscribers in cohort
+    - retention: Monthly retention data (0-12 months)
     """
-    try:
-        growth = AnalyticsService.get_audience_growth(db, current_user.id, days)
-        return AudienceGrowthResponse(**growth)
+    verify_fan_club_access(fan_club_id, current_user, db)
     
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get audience growth: {str(e)}")
+    try:
+        cohort_date = datetime.strptime(month, '%Y-%m').date()
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid month format, use YYYY-MM"
+        )
+    
+    analytics = CachedAnalyticsService(db)
+    cohort = analytics.get_retention_cohort(cohort_date, fan_club_id=fan_club_id)
+    
+    return RetentionCohortResponse(**cohort)
 
 
-@router.get("/audience/retention", response_model=RetentionMetricsResponse)
-def get_retention_metrics(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+@router.get(
+    "/retention/matrix",
+    response_model=RetentionMatrixResponse,
+    summary="Get Retention Matrix"
+)
+async def get_retention_matrix(
+    fan_club_id: int = Query(...),
+    months: int = Query(12, ge=3, le=36),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
-    Get listener retention metrics.
+    Get retention matrix for last N months.
     
-    **Authorization:** Requires authentication
+    Shows retention cohorts for each month's new subscribers.
     
-    **Metrics Returned:**
+    **Parameters:**
+    - fan_club_id: Fan club ID
+    - months: Number of months (default: 12)
     
-    1. **Overall Retention Rate:**
-       - Percentage of listeners who return within 30 days
-       - Industry benchmark: 25-30%
-    
-    2. **Cohort Retention:**
-       - Retention at Day 1, 7, 14, 30, 60, 90
-       - Shows how many listeners stick around over time
-       - Helps identify drop-off points
-    
-    3. **Retention by Source:**
-       - How well listeners from each source stick around
-       - Sources: Promo Links, Social Media, Playlists, Search, Direct
-       - Identifies best acquisition channels
-    
-    4. **Average Session Duration:**
-       - How long listeners typically engage
-       - Measured in minutes
-       - Indicates content stickiness
-    
-    5. **Repeat Listener Rate:**
-       - Percentage who come back for more
-       - Higher = more engaged audience
-    
-    **Use this for:**
-    - Identifying churn points
-    - Optimizing acquisition channels
-    - Improving content strategy
-    - Increasing listener lifetime value
+    **Returns:**
+    - cohorts: List of cohorts with retention percentages
+    - months: Number of months requested
     """
-    try:
-        retention = AnalyticsService.get_retention_metrics(db, current_user.id)
-        return RetentionMetricsResponse(**retention)
+    verify_fan_club_access(fan_club_id, current_user, db)
     
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get retention metrics: {str(e)}")
+    analytics = CachedAnalyticsService(db)
+    matrix = analytics.get_retention_matrix(months, fan_club_id)
+    
+    return RetentionMatrixResponse(cohorts=matrix, months=months)
 
 
-@router.get("/audience/insights", response_model=AudienceInsightsResponse)
-def get_audience_insights(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+# ==================== FORECASTING ENDPOINTS ====================
+
+@router.get(
+    "/forecast/revenue",
+    response_model=ForecastResponse,
+    summary="Forecast Revenue"
+)
+async def forecast_revenue(
+    fan_club_id: int = Query(...),
+    months: int = Query(6, ge=1, le=12),
+    method: str = Query("linear", regex="^(linear|seasonal)$"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
-    Get AI-powered audience insights and recommendations.
+    Forecast future revenue based on historical data.
     
-    **Authorization:** Requires authentication
+    **Methods:**
+    - linear: Linear regression on historical trend
+    - seasonal: Seasonal adjustment (advanced)
     
-    **What You Get:**
+    **Parameters:**
+    - fan_club_id: Fan club ID
+    - months: Months to forecast (default: 6)
+    - method: Forecasting method (default: linear)
     
-    1. **Insights:**
-       - Key findings about your audience
-       - Demographic patterns
-       - Geographic strengths
-       - Engagement trends
-       - Growth patterns
-    
-    2. **Recommendations:**
-       - Actionable steps to grow
-       - Platform-specific advice
-       - Content suggestions
-       - Timing recommendations
-       - Collaboration opportunities
-       - Tour/event locations
-    
-    3. **Content Strategy:**
-       - Optimal posting frequency
-       - Best platforms for your audience
-       - Recommended content types
-       - Timing for maximum engagement
-    
-    4. **Growth Strategy:**
-       - Focus areas for growth
-       - Target demographics to reach
-       - Geographic markets to prioritize
-    
-    **AI Analysis Includes:**
-    - Audience size and composition
-    - Fan segment distribution
-    - Growth trajectory
-    - Retention patterns
-    - Platform performance
-    - Geographic reach
-    
-    **Use this for:**
-    - Strategic planning
-    - Campaign optimization
-    - Resource allocation
-    - Content calendar planning
-    - Partnership decisions
+    **Returns:**
+    - forecast: List of monthly forecasts
+    - currency: Currency code
+    - historical_months: Months of historical data used
     """
-    try:
-        insights = AnalyticsService.generate_audience_insights(db, current_user.id)
-        return AudienceInsightsResponse(**insights)
+    verify_fan_club_access(fan_club_id, current_user, db)
     
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate audience insights: {str(e)}")
+    analytics = CachedAnalyticsService(db)
+    forecast = analytics.forecast_revenue(months, method, fan_club_id=fan_club_id)
+    
+    return ForecastResponse(forecast=forecast)
+
+
+# ==================== METRICS ENDPOINTS ====================
+
+@router.get(
+    "/metrics/creator",
+    response_model=CreatorMetricsResponse,
+    summary="Get Creator Metrics"
+)
+async def get_creator_metrics(
+    days: int = Query(30, ge=7, le=365),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get creator fan club metrics.
+    
+    **Parameters:**
+    - days: Period in days (default: 30)
+    
+    **Returns:**
+    - creator_id: Creator ID
+    - fan_clubs: Number of fan clubs
+    - total_subscribers: Total across all fan clubs
+    - total_mrr: Total MRR
+    - average_tier_price: Average subscription price
+    - top_tier: Most popular tier
+    - churn_rate: Current churn rate
+    """
+    analytics = CachedAnalyticsService(db)
+    metrics = analytics.get_creator_metrics(current_user.id, days)
+    
+    return CreatorMetricsResponse(**metrics)
+
+
+@router.get(
+    "/metrics/fan-club",
+    response_model=FanClubMetricsResponse,
+    summary="Get Fan Club Metrics"
+)
+async def get_fan_club_metrics(
+    fan_club_id: int = Query(...),
+    days: int = Query(30, ge=7, le=365),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get specific fan club metrics.
+    
+    **Parameters:**
+    - fan_club_id: Fan club ID
+    - days: Period in days (default: 30)
+    
+    **Returns:**
+    - fan_club_id: Fan club ID
+    - name: Fan club name
+    - total_subscribers: Total subscribers
+    - active_subscribers: Active subscriptions
+    - cancelled_subscribers: Cancelled subscriptions
+    - mrr: Monthly recurring revenue
+    - growth_rate: Growth percentage
+    - engagement_rate: Engagement percentage
+    """
+    verify_fan_club_access(fan_club_id, current_user, db)
+    
+    analytics = CachedAnalyticsService(db)
+    metrics = analytics.get_fan_club_metrics(fan_club_id, days)
+    
+    return FanClubMetricsResponse(**metrics)
+
+
+@router.get(
+    "/metrics/subscriber/{subscriber_id}",
+    response_model=SubscriberActivityResponse,
+    summary="Get Subscriber Activity"
+)
+async def get_subscriber_activity(
+    subscriber_id: int,
+    days: int = Query(30, ge=1, le=365),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get subscriber activity metrics.
+    
+    **Parameters:**
+    - subscriber_id: Subscriber user ID
+    - days: Period in days (default: 30)
+    
+    **Returns:**
+    - subscriber_id: Subscriber ID
+    - content_views: Number of content views
+    - posts_liked: Number of posts liked
+    - messages_sent: Messages sent
+    - last_activity: Last activity timestamp
+    - engagement_score: 0-100 engagement score
+    """
+    # TODO: Verify current user can access this subscriber
+    
+    analytics = CachedAnalyticsService(db)
+    activity = analytics.get_subscriber_activity(subscriber_id, days)
+    
+    return SubscriberActivityResponse(**activity)
+
+
+# ==================== DASHBOARD ENDPOINTS ====================
+
+@router.get(
+    "/dashboard/summary",
+    summary="Get Dashboard Summary"
+)
+async def get_dashboard_summary(
+    fan_club_id: int = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get complete dashboard summary for fan club.
+    
+    **Returns:**
+    - mrr: Current MRR
+    - arpu: Average revenue per user
+    - churn_rate: Current churn rate
+    - retention_rate: 30-day retention
+    - forecast: Next month forecast
+    - top_tier: Most popular tier
+    - new_subscribers: New this month
+    - trending: Growth trend (up/down/stable)
+    """
+    verify_fan_club_access(fan_club_id, current_user, db)
+    
+    analytics = CachedAnalyticsService(db)
+    
+    # Get all metrics
+    mrr = analytics.get_mrr(fan_club_id=fan_club_id)
+    arpu = analytics.get_arpu(fan_club_id=fan_club_id)
+    churn = analytics.get_churn_rate(fan_club_id=fan_club_id)
+    forecast = analytics.forecast_revenue(1, fan_club_id=fan_club_id)
+    metrics = analytics.get_fan_club_metrics(fan_club_id)
+    
+    # Determine trend
+    trend_data = analytics.get_revenue_trend(3, fan_club_id=fan_club_id)
+    trend = "stable"
+    if len(trend_data) >= 2:
+        if trend_data[-1]['mrr'] > trend_data[-2]['mrr']:
+            trend = "up"
+        elif trend_data[-1]['mrr'] < trend_data[-2]['mrr']:
+            trend = "down"
+    
+    return {
+        'mrr': mrr['mrr'],
+        'arpu': arpu['arpu'],
+        'churn_rate': churn['churn_rate'],
+        'retention_rate': 100 - churn['churn_rate'],  # Inverse
+        'forecast_next_month': forecast[0]['forecast_mrr'] if forecast else None,
+        'top_tier': metrics.get('top_tier', 'N/A'),
+        'new_subscribers': metrics.get('growth_rate', 0),
+        'trending': trend,
+        'active_subscribers': mrr['active_subscriptions'],
+        'monthly_growth_percent': metrics.get('growth_rate', 0)
+    }
+
+
+@router.get(
+    "/export/csv",
+    summary="Export Analytics to CSV"
+)
+async def export_analytics_csv(
+    fan_club_id: int = Query(...),
+    report_type: str = Query("revenue", regex="^(revenue|churn|retention)$"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Export analytics data as CSV.
+    
+    **Report Types:**
+    - revenue: MRR and revenue trend
+    - churn: Churn analysis and reasons
+    - retention: Retention cohorts
+    
+    **Returns:**
+    - CSV file download
+    """
+    verify_fan_club_access(fan_club_id, current_user, db)
+    
+    # TODO: Implement CSV export
+    return {"message": "CSV export coming soon"}
+
+
+# ==================== CACHE MANAGEMENT ====================
+
+@router.get(
+    "/cache/stats",
+    summary="Get Cache Statistics"
+)
+async def get_cache_stats(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get cache statistics (admin only).
+    
+    **Returns:**
+    - status: 'connected', 'unavailable', or 'error'
+    - cached_analytics: Number of cached analytics
+    - memory_used_mb: Memory used by cache
+    - connected_clients: Number of connected clients
+    """
+    stats = CacheManager.get_cache_stats()
+    return stats
+
+
+@router.post(
+    "/cache/invalidate",
+    summary="Invalidate Cache"
+)
+async def invalidate_cache(
+    fan_club_id: Optional[int] = Query(None),
+    clear_all: bool = Query(False),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Invalidate analytics cache (admin only).
+    
+    **Parameters:**
+    - fan_club_id: Invalidate specific fan club cache
+    - clear_all: Clear all analytics cache
+    
+    **Returns:**
+    - message: Invalidation status
+    """
+    if fan_club_id:
+        # Verify access
+        verify_fan_club_access(fan_club_id, current_user, db)
+        CacheManager.invalidate_fan_club(fan_club_id)
+        return {"message": f"Invalidated cache for fan club {fan_club_id}"}
+    
+    elif clear_all:
+        # TODO: Add admin check
+        CacheManager.invalidate_all()
+        return {"message": "Cleared all analytics cache"}
+    
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Specify fan_club_id or set clear_all=true"
+        )
+
+
+# ==================== TIME-BASED COMPARISON ====================
+
+@router.get(
+    "/compare/period",
+    summary="Compare Two Periods"
+)
+async def compare_periods(
+    fan_club_id: int = Query(...),
+    period1_start: str = Query(..., description="Period 1 start (YYYY-MM-DD)"),
+    period1_end: str = Query(..., description="Period 1 end (YYYY-MM-DD)"),
+    period2_start: str = Query(..., description="Period 2 start (YYYY-MM-DD)"),
+    period2_end: str = Query(..., description="Period 2 end (YYYY-MM-DD)"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Compare metrics between two time periods.
+    
+    **Parameters:**
+    - fan_club_id: Fan club ID
+    - period1_start: Start date (YYYY-MM-DD)
+    - period1_end: End date (YYYY-MM-DD)
+    - period2_start: Start date (YYYY-MM-DD)
+    - period2_end: End date (YYYY-MM-DD)
+    
+    **Returns:**
+    - period1: Metrics for first period
+    - period2: Metrics for second period
+    - comparison: Change in metrics (amount and %)
+    - trend: 'up', 'down', or 'stable'
+    """
+    verify_fan_club_access(fan_club_id, current_user, db)
+    
+    # Parse dates
+    try:
+        p1_start = datetime.strptime(period1_start, '%Y-%m-%d').date()
+        p1_end = datetime.strptime(period1_end, '%Y-%m-%d').date()
+        p2_start = datetime.strptime(period2_start, '%Y-%m-%d').date()
+        p2_end = datetime.strptime(period2_end, '%Y-%m-%d').date()
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid date format, use YYYY-MM-DD"
+        )
+    
+    analytics = CachedAnalyticsService(db)
+    
+    # Get metrics for both periods
+    arpu1 = analytics.get_arpu(p1_start, p1_end, fan_club_id)
+    arpu2 = analytics.get_arpu(p2_start, p2_end, fan_club_id)
+    
+    # Calculate change
+    change_amount = arpu2['arpu'] - arpu1['arpu']
+    change_percent = 0
+    if arpu1['arpu'] > 0:
+        change_percent = (change_amount / arpu1['arpu']) * 100
+    
+    trend = "stable"
+    if change_percent > 5:
+        trend = "up"
+    elif change_percent < -5:
+        trend = "down"
+    
+    return {
+        'period1': {
+            'start': period1_start,
+            'end': period1_end,
+            'arpu': arpu1['arpu'],
+            'total_revenue': arpu1['total_revenue'],
+            'active_users': arpu1['active_users']
+        },
+        'period2': {
+            'start': period2_start,
+            'end': period2_end,
+            'arpu': arpu2['arpu'],
+            'total_revenue': arpu2['total_revenue'],
+            'active_users': arpu2['active_users']
+        },
+        'comparison': {
+            'arpu_change': change_amount,
+            'arpu_percent_change': round(change_percent, 2),
+            'revenue_change': arpu2['total_revenue'] - arpu1['total_revenue'],
+            'user_change': arpu2['active_users'] - arpu1['active_users']
+        },
+        'trend': trend
+    }
+
+
+@router.get(
+    "/compare/month-over-month",
+    summary="Month-Over-Month Comparison"
+)
+async def mom_comparison(
+    fan_club_id: int = Query(...),
+    months: int = Query(12, ge=3, le=24),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get month-over-month comparison for last N months.
+    
+    **Parameters:**
+    - fan_club_id: Fan club ID
+    - months: Number of months to compare (default: 12)
+    
+    **Returns:**
+    - comparisons: List of month-to-month comparisons
+    - average_growth: Average MoM growth %
+    - trend: Overall trend
+    """
+    verify_fan_club_access(fan_club_id, current_user, db)
+    
+    analytics = CachedAnalyticsService(db)
+    trend = analytics.get_revenue_trend(months, fan_club_id=fan_club_id)
+    
+    comparisons = []
+    growths = []
+    
+    for i in range(1, len(trend)):
+        current = trend[i]
+        previous = trend[i - 1]
+        
+        mrr_change = current['mrr'] - previous['mrr']
+        mrr_percent = 0
+        if previous['mrr'] > 0:
+            mrr_percent = (mrr_change / previous['mrr']) * 100
+        
+        sub_change = current['subscriptions'] - previous['subscriptions']
+        
+        comparisons.append({
+            'month': current['month'],
+            'mrr_current': current['mrr'],
+            'mrr_previous': previous['mrr'],
+            'mrr_change': mrr_change,
+            'mrr_percent_change': round(mrr_percent, 2),
+            'subscriptions_change': sub_change,
+            'trend': 'up' if mrr_change > 0 else 'down' if mrr_change < 0 else 'stable'
+        })
+        
+        growths.append(mrr_percent)
+    
+    avg_growth = sum(growths) / len(growths) if growths else 0
+    
+    overall_trend = "stable"
+    if avg_growth > 5:
+        overall_trend = "up"
+    elif avg_growth < -5:
+        overall_trend = "down"
+    
+    return {
+        'comparisons': comparisons,
+        'average_growth_percent': round(avg_growth, 2),
+        'trend': overall_trend,
+        'months_analyzed': len(comparisons)
+    }
+
+
+@router.get(
+    "/compare/year-over-year",
+    summary="Year-Over-Year Comparison"
+)
+async def yoy_comparison(
+    fan_club_id: int = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get year-over-year comparison.
+    
+    Compares current year metrics with previous year.
+    
+    **Parameters:**
+    - fan_club_id: Fan club ID
+    
+    **Returns:**
+    - current_year: Current year metrics (12 months)
+    - previous_year: Previous year metrics (12 months)
+    - comparison: YoY change
+    - growth_percent: YoY growth %
+    """
+    verify_fan_club_access(fan_club_id, current_user, db)
+    
+    analytics = CachedAnalyticsService(db)
+    
+    # Get 24 months of data
+    trend_24 = analytics.get_revenue_trend(24, fan_club_id=fan_club_id)
+    
+    if len(trend_24) < 24:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Not enough historical data for YoY comparison (need 24 months)"
+        )
+    
+    current_year = trend_24[12:]  # Last 12 months
+    previous_year = trend_24[:12]  # First 12 months
+    
+    current_mrr_total = sum(m['mrr'] for m in current_year)
+    previous_mrr_total = sum(m['mrr'] for m in previous_year)
+    
+    mrr_change = current_mrr_total - previous_mrr_total
+    growth_percent = 0
+    if previous_mrr_total > 0:
+        growth_percent = (mrr_change / previous_mrr_total) * 100
+    
+    return {
+        'current_year': current_year,
+        'previous_year': previous_year,
+        'comparison': {
+            'total_mrr_change': mrr_change,
+            'total_mrr_percent_change': round(growth_percent, 2),
+            'avg_mrr_current': sum(m['mrr'] for m in current_year) / 12,
+            'avg_mrr_previous': sum(m['mrr'] for m in previous_year) / 12
+        },
+        'trend': 'up' if growth_percent > 0 else 'down' if growth_percent < 0 else 'stable'
+    }

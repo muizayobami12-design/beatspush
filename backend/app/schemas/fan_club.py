@@ -2,7 +2,7 @@
 Fan Club System Schemas - Pydantic models for request/response validation
 """
 from pydantic import BaseModel, Field, validator, root_validator
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
@@ -57,7 +57,7 @@ class ContentTypeEnum(str, Enum):
 class FanClubCreate(BaseModel):
     """Request to create a fan club"""
     name: str = Field(..., min_length=3, max_length=100)
-    description: Optional[str] = Field(None, max_length=2000)
+    description: Optional[str] = Field(None, max_length=500)
     welcome_message: Optional[str] = Field(None, max_length=1000)
     
     @validator('name')
@@ -70,7 +70,7 @@ class FanClubCreate(BaseModel):
 class FanClubUpdate(BaseModel):
     """Request to update fan club"""
     name: Optional[str] = Field(None, min_length=3, max_length=100)
-    description: Optional[str] = Field(None, max_length=2000)
+    description: Optional[str] = Field(None, max_length=500)
     welcome_message: Optional[str] = Field(None, max_length=1000)
     is_active: Optional[bool] = None
 
@@ -340,6 +340,155 @@ class BroadcastRequest(BaseModel):
 # ============================================================================
 # ANALYTICS SCHEMAS
 # ============================================================================
+
+class MRRResponse(BaseModel):
+    """Monthly Recurring Revenue response"""
+    mrr: Decimal
+    active_subscriptions: int
+    month: str
+    currency: str
+    breakdown: Dict[str, Decimal]  # tier_name -> amount
+    
+    class Config:
+        from_attributes = True
+
+
+class ARPUResponse(BaseModel):
+    """Average Revenue Per User response"""
+    arpu: Decimal
+    total_revenue: Decimal
+    active_users: int
+    period: str
+    
+    class Config:
+        from_attributes = True
+
+
+class LTVResponse(BaseModel):
+    """Lifetime Value response"""
+    ltv: Decimal
+    avg_arpu: Decimal
+    avg_lifetime_months: float
+    sample_size: int
+    
+    class Config:
+        from_attributes = True
+
+
+class RevenueTrendItem(BaseModel):
+    """Single month in revenue trend"""
+    month: str
+    mrr: Decimal
+    subscriptions: int
+    new_subs: int
+    cancelled_subs: int
+
+
+class RevenueTrendResponse(BaseModel):
+    """Revenue trend response"""
+    data: List[RevenueTrendItem]
+    currency: str = "USD"
+
+
+class ChurnRateResponse(BaseModel):
+    """Churn rate metrics"""
+    churn_rate: float  # Percentage
+    churned_subscribers: int
+    beginning_subscribers: int
+    ending_subscribers: int
+    month: str
+
+
+class ChurnReasonItem(BaseModel):
+    """Churn reason with count"""
+    reason: str
+    count: int
+    percentage: float
+
+
+class ChurnReasonsResponse(BaseModel):
+    """Top churn reasons response"""
+    reasons: List[ChurnReasonItem]
+    total_churned: int
+
+
+class RetentionItem(BaseModel):
+    """Single month retention data"""
+    month: int
+    retained: int
+    percentage: float
+
+
+class RetentionCohortResponse(BaseModel):
+    """Retention cohort for a month"""
+    cohort_month: str
+    cohort_size: int
+    retention: List[RetentionItem]
+
+
+class RetentionMatrixItem(BaseModel):
+    """Single cohort in retention matrix"""
+    cohort_month: str
+    cohort_size: int
+    retention_percentages: List[float]
+
+
+class RetentionMatrixResponse(BaseModel):
+    """Retention matrix response"""
+    cohorts: List[RetentionMatrixItem]
+    months: int
+
+
+class ForecastItem(BaseModel):
+    """Single forecast month"""
+    month: str
+    forecast_mrr: Decimal
+    confidence_interval: Tuple[Decimal, Decimal]
+    method: str
+
+
+class ForecastResponse(BaseModel):
+    """Revenue forecast response"""
+    forecast: List[ForecastItem]
+    currency: str = "USD"
+    historical_months: int = 12
+
+
+class SubscriberActivityResponse(BaseModel):
+    """Subscriber activity metrics"""
+    subscriber_id: int
+    content_views: int
+    posts_liked: int
+    messages_sent: int
+    last_activity: Optional[datetime]
+    engagement_score: int  # 0-100
+    period_days: int
+
+
+class CreatorMetricsResponse(BaseModel):
+    """Creator fan club metrics"""
+    creator_id: int
+    fan_clubs: int
+    total_subscribers: int
+    total_mrr: Decimal
+    average_tier_price: Decimal
+    top_tier: str
+    churn_rate: float
+    period_days: int
+
+
+class FanClubMetricsResponse(BaseModel):
+    """Fan club metrics"""
+    fan_club_id: int
+    name: str
+    total_subscribers: int
+    active_subscribers: int
+    cancelled_subscribers: int
+    mrr: Decimal
+    growth_rate: float  # Percentage
+    engagement_rate: float  # Percentage
+    period_days: int
+
 
 class SubscriptionAnalytics(BaseModel):
     """Subscription analytics data"""

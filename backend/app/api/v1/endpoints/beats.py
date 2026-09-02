@@ -64,10 +64,11 @@ def create_beat(
         # Build response
         producer = db.query(User).filter(User.id == beat.producer_user_id).first()
         
-        response = BeatResponse(
-            **beat.__dict__,
-            producer_name=producer.username or producer.full_name,
-        )
+        # Create dict from beat, removing duplicates
+        beat_dict = {k: v for k, v in beat.__dict__.items() if not k.startswith('_')}
+        beat_dict['producer_name'] = producer.username or producer.full_name
+        
+        response = BeatResponse(**beat_dict)
         
         return response
     
@@ -125,12 +126,17 @@ def browse_beats(
     for beat in beats:
         producer = db.query(User).filter(User.id == beat.producer_user_id).first()
         
-        beat_responses.append(BeatResponse(
-            **beat.__dict__,
-            producer_name=producer.username or producer.full_name if producer else "Unknown",
-            is_favorited=getattr(beat, 'is_favorited', False),
-            is_purchased=getattr(beat, 'is_purchased', False),
-        ))
+        # Create dict from beat, removing duplicates
+        beat_dict = {k: v for k, v in beat.__dict__.items() if not k.startswith('_')}
+        beat_dict['producer_name'] = producer.username or producer.full_name if producer else "Unknown"
+        
+        # Only set if not already present from query
+        if 'is_favorited' not in beat_dict:
+            beat_dict['is_favorited'] = False
+        if 'is_purchased' not in beat_dict:
+            beat_dict['is_purchased'] = False
+            
+        beat_responses.append(BeatResponse(**beat_dict))
     
     return BeatListResponse(
         beats=beat_responses,
@@ -164,12 +170,17 @@ def get_beat(
     # Build response
     producer = db.query(User).filter(User.id == beat.producer_user_id).first()
     
-    return BeatResponse(
-        **beat.__dict__,
-        producer_name=producer.username or producer.full_name if producer else "Unknown",
-        is_favorited=getattr(beat, 'is_favorited', False),
-        is_purchased=getattr(beat, 'is_purchased', False),
-    )
+    # Create dict from beat, removing duplicates
+    beat_dict = {k: v for k, v in beat.__dict__.items() if not k.startswith('_')}
+    beat_dict['producer_name'] = producer.username or producer.full_name if producer else "Unknown"
+    
+    # Only set if not already present from query
+    if 'is_favorited' not in beat_dict:
+        beat_dict['is_favorited'] = False
+    if 'is_purchased' not in beat_dict:
+        beat_dict['is_purchased'] = False
+        
+    return BeatResponse(**beat_dict)
 
 
 @router.put("/{beat_id}", response_model=BeatResponse)
@@ -199,10 +210,11 @@ def update_beat(
         
         producer = db.query(User).filter(User.id == beat.producer_user_id).first()
         
-        return BeatResponse(
-            **beat.__dict__,
-            producer_name=producer.username or producer.full_name,
-        )
+        # Create dict from beat, removing duplicates
+        beat_dict = {k: v for k, v in beat.__dict__.items() if not k.startswith('_')}
+        beat_dict['producer_name'] = producer.username or producer.full_name
+        
+        return BeatResponse(**beat_dict)
     
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -261,10 +273,11 @@ def get_my_beats(
     total = query.count()
     beats = query.order_by(Beat.created_at.desc()).offset(skip).limit(page_size).all()
     
-    beat_responses = [
-        BeatResponse(**beat.__dict__, producer_name=current_user.username or current_user.full_name)
-        for beat in beats
-    ]
+    beat_responses = []
+    for beat in beats:
+        beat_dict = {k: v for k, v in beat.__dict__.items() if not k.startswith('_')}
+        beat_dict['producer_name'] = current_user.username or current_user.full_name
+        beat_responses.append(BeatResponse(**beat_dict))
     
     return BeatListResponse(
         beats=beat_responses,
@@ -454,11 +467,12 @@ def get_my_favorites(
     for beat in beats:
         producer = db.query(User).filter(User.id == beat.producer_user_id).first()
         
-        beat_responses.append(BeatResponse(
-            **beat.__dict__,
-            producer_name=producer.username or producer.full_name if producer else "Unknown",
-            is_favorited=True,
-        ))
+        # Create dict from beat, removing duplicates
+        beat_dict = {k: v for k, v in beat.__dict__.items() if not k.startswith('_')}
+        beat_dict['producer_name'] = producer.username or producer.full_name if producer else "Unknown"
+        beat_dict['is_favorited'] = True
+        
+        beat_responses.append(BeatResponse(**beat_dict))
     
     return BeatListResponse(
         beats=beat_responses,
@@ -531,10 +545,9 @@ def get_my_stats(
     # Format top beats
     top_beat_responses = []
     for beat in stats["top_beats"]:
-        top_beat_responses.append(BeatResponse(
-            **beat.__dict__,
-            producer_name=current_user.username or current_user.full_name,
-        ))
+        beat_dict = {k: v for k, v in beat.__dict__.items() if not k.startswith('_')}
+        beat_dict['producer_name'] = current_user.username or current_user.full_name
+        top_beat_responses.append(BeatResponse(**beat_dict))
     
     # Format recent purchases
     recent_purchase_responses = []

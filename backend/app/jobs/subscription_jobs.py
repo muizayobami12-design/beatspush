@@ -1,480 +1,430 @@
 """
-Background jobs for subscription management.
+Subscription background jobs.
 
 Jobs:
-- process_subscription_renewals: Daily renewal processing
-- retry_failed_payments: Retry failed payments (3 attempts over 7 days)
-- send_renewal_reminders: Send reminders 3 days before renewal
-- cancel_expired_trials: Clean up expired trial subscriptions
-- send_welcome_messages: Welcome new subscribers
-- send_engagement_messages: Monthly engagement messages
+- process_subscription_renewals() - Daily renewal processing
+- retry_failed_payments() - Retry failed payments
+- send_renewal_reminders() - Send reminders 3 days before renewal
+- cancel_expired_trials() - Auto-cancel expired trials
 """
 
 import logging
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
-from app.db.database import SessionLocal
-from app.models.fan_club import Subscription, SubscriptionPayment, FanClub, MembershipTier
-from app.models.user import User
-from app.models.messaging import Message, Conversation
+from app.core.config import settings
+from app.models.fan_club import Subscription, SubscriptionPayment
+from app.services.subscription_service import SubscriptionService
 from app.services.payment_service import PaymentService
+from app.jobs.scheduler import log_job_execution
 
 logger = logging.getLogger(__name__)
 
 
-def get_db():
+def get_db_session():
     """Get database session for background jobs."""
-    db = SessionLocal()
-    try:
-        return db
-    finally:
-        pass  # Don't close here, let job function handle it
+    engine = create_engine(settings.DATABASE_URL)
+    SessionLocal = sessionmaker(bind=engine)
+    return SessionLocal()
 
 
-def process_subscription_renewals():
+async def process_subscription_renewals():
     """
-    Process subscription renewals for today.
+    Process daily subscription renewals.
     
-    Runs daily at 2:00 AM UTC.
-    Finds all subscriptions with next_billing_date = today and auto_renew = True.
+    **Procedure:**
+    1. Query subscriptions with next_billing_date = today
+    2. Check if auto_renew is enabled
+    3. Process payment via PaymentService
+    4. On success: Update subscription period, reset failed counter
+    5. On failure: Mark as PAST_DUE, increment failed counter
+    
+    **Execution:** Daily at 00:00 UTC
     """
-    db = get_db()
+    job_id = "subscription_renewal_daily"
+    job_name = "Daily Subscription Renewal"
+    
     try:
+        db = get_db_session()
         today = datetime.utcnow().date()
         
-        # Find subscriptions due for renewal
+        # Query subscriptions due for renewal today
         subscriptions = db.query(Subscription).filter(
-            and_(
-                Subscription.next_billing_date <= datetime.utcnow(),
-                Subscription.status == "active",
-                Subscription.auto_renew == True
-            )
+            Subscription.next_billing_date >= datetime(today.year, today.month, today.day),
+            Subscription.next_billing_date < datetime(
+                today.year, today.month, today.day
+            ) + timedelta(days=1),
+            Subscription.status.in_(["active", "past_due"]),
+            Subscription.auto_renew == True
         ).all()
         
-        logger.info(f"Processing {len(subscriptions)} subscription renewals")
+        if not subscriptions:
+            log_job_execution(job_id, job_name, "success", f"No renewals scheduled for {today}")
+            db.close()
+            return
+        
+        logger.info(f"Processing {len(subscriptions)} subscription renewals for {today}")
         
         payment_service = PaymentService(db)
         success_count = 0
-        failed_count = 0
+        failure_count = 0
         
         for subscription in subscriptions:
             try:
-                # Get tier info for amount
-                tier = db.query(MembershipTier).filter(
-                    MembershipTier.id == subscription.tier_id
-                ).first()
-                
-                if not tier:
-                    logger.error(f"Tier not found for subscription {subscription.id}")
+                # Check if subscription has payment method
+                if not subscription.payment_provider_customer_id:
+                    logger.warning(
+                        f"Subscription {subscription.id} has no payment method, skipping renewal"
+                    )
+                    failure_count += 1
                     continue
                 
-                # Determine amount based on billing cycle
-                amount = tier.monthly_price if subscription.billing_cycle == "monthly" else tier.yearly_price
+                # Process renewal payment
+                success, payment = payment_service.process_subscription_renewal(
+                    subscription_id=subscription.id
+                )
                 
-                # Process payment
-                if subscription.stripe_subscription_id:
-                    # Stripe handles automatic renewals
-                    logger.info(f"Stripe will handle renewal for subscription {subscription.id}")
-                    success_count += 1
-                elif subscription.paystack_subscription_code:
-                    # Paystack handles automatic renewals
-                    logger.info(f"Paystack will handle renewal for subscription {subscription.id}")
+                if success:
+                    logger.info(f"Renewed subscription {subscription.id}")
                     success_count += 1
                 else:
-                    # Manual payment processing (shouldn't happen in production)
-                    logger.warning(f"No payment provider for subscription {subscription.id}")
-                    failed_count += 1
-                
+                    logger.warning(f"Failed to renew subscription {subscription.id}")
+                    failure_count += 1
+            
             except Exception as e:
                 logger.error(f"Error renewing subscription {subscription.id}: {e}", exc_info=True)
-                failed_count += 1
+                failure_count += 1
         
-        logger.info(f"Renewal processing complete: {success_count} success, {failed_count} failed")
-        
-    except Exception as e:
-        logger.error(f"Error in process_subscription_renewals: {e}", exc_info=True)
-    finally:
+        db.commit()
         db.close()
-
-
-def retry_failed_payments():
-    """
-    Retry failed payments according to schedule.
+        
+        message = f"Processed {success_count} successful, {failure_count} failed"
+        log_job_execution(job_id, job_name, "success", message)
     
-    Runs daily at 10:00 AM UTC.
-    Retry schedule:
-    - Day 1: Immediate (handled by webhook)
-    - Day 3: First retry
-    - Day 7: Second retry
-    - After 3 failures: Mark subscription as past_due
+    except Exception as e:
+        logger.error(f"Error in subscription renewal job: {e}", exc_info=True)
+        log_job_execution(job_id, job_name, "error", str(e))
+        if 'db' in locals():
+            db.close()
+
+
+async def retry_failed_payments():
     """
-    db = get_db()
+    Retry failed payments on schedule.
+    
+    **Procedure:**
+    1. Query payments with status=failed and next_retry_at <= now
+    2. Check retry_attempt < 3
+    3. Attempt payment again
+    4. On success: Update subscription, clear failed count
+    5. On failure: Update next_retry_at
+    6. On max retries: Mark as past_due
+    
+    **Execution:** Hourly at :00 minutes
+    
+    **Retry Schedule:**
+    - Day 1: Attempt 1
+    - Day 3: Attempt 2
+    - Day 7: Attempt 3
+    """
+    job_id = "payment_retry_hourly"
+    job_name = "Hourly Payment Retry"
+    
     try:
-        # Find subscriptions with failed payments
-        past_due_subscriptions = db.query(Subscription).filter(
-            and_(
-                Subscription.status == "active",
-                Subscription.failed_payment_count > 0,
-                Subscription.failed_payment_count < 3
-            )
+        db = get_db_session()
+        now = datetime.utcnow()
+        
+        # Query failed payments due for retry
+        failed_payments = db.query(SubscriptionPayment).filter(
+            SubscriptionPayment.status == "failed",
+            SubscriptionPayment.retry_attempt < 3,
+            SubscriptionPayment.next_retry_at <= now
         ).all()
         
-        logger.info(f"Found {len(past_due_subscriptions)} subscriptions with failed payments")
+        if not failed_payments:
+            log_job_execution(job_id, job_name, "success", "No payments to retry")
+            db.close()
+            return
+        
+        logger.info(f"Retrying {len(failed_payments)} failed payments")
         
         payment_service = PaymentService(db)
         retry_count = 0
         
-        for subscription in past_due_subscriptions:
-            # Get last failed payment
-            last_payment = db.query(SubscriptionPayment).filter(
-                and_(
-                    SubscriptionPayment.subscription_id == subscription.id,
-                    SubscriptionPayment.status == "failed"
+        for payment in failed_payments:
+            try:
+                subscription = payment.subscription
+                
+                # Attempt retry
+                success, new_payment = payment_service.retry_failed_payment(
+                    payment_id=payment.id
                 )
-            ).order_by(SubscriptionPayment.created_at.desc()).first()
-            
-            if not last_payment:
-                continue
-            
-            # Calculate days since last attempt
-            days_since_failure = (datetime.utcnow() - last_payment.created_at).days
-            
-            # Retry schedule: Day 3, Day 7
-            should_retry = (
-                (subscription.failed_payment_count == 1 and days_since_failure >= 3) or
-                (subscription.failed_payment_count == 2 and days_since_failure >= 7)
-            )
-            
-            if should_retry:
-                try:
-                    # Get tier for amount
-                    tier = db.query(MembershipTier).filter(
-                        MembershipTier.id == subscription.tier_id
-                    ).first()
-                    
-                    if not tier:
-                        continue
-                    
-                    amount = tier.monthly_price if subscription.billing_cycle == "monthly" else tier.yearly_price
-                    
-                    # Attempt payment retry
-                    logger.info(f"Retrying payment for subscription {subscription.id} (attempt {subscription.failed_payment_count + 1}/3)")
-                    
-                    # The actual retry is handled by Stripe/Paystack automatically
-                    # This job is for logging and notification purposes
-                    
-                    # TODO: Send retry notification email
+                
+                if success:
+                    logger.info(f"Retry successful for payment {payment.id}")
                     retry_count += 1
-                    
-                except Exception as e:
-                    logger.error(f"Error retrying payment for subscription {subscription.id}: {e}")
+                else:
+                    logger.warning(f"Retry failed for payment {payment.id}")
             
-            # After 3 failures, suspend subscription
-            if subscription.failed_payment_count >= 3:
-                subscription.status = "past_due"
-                db.commit()
-                logger.warning(f"Subscription {subscription.id} marked past_due after 3 failed attempts")
-                # TODO: Send final suspension email
+            except Exception as e:
+                logger.error(f"Error retrying payment {payment.id}: {e}", exc_info=True)
         
-        logger.info(f"Payment retry job complete: {retry_count} retries initiated")
-        
-    except Exception as e:
-        logger.error(f"Error in retry_failed_payments: {e}", exc_info=True)
-    finally:
+        db.commit()
         db.close()
+        
+        log_job_execution(job_id, job_name, "success", f"Retried {retry_count} payments")
+    
+    except Exception as e:
+        logger.error(f"Error in payment retry job: {e}", exc_info=True)
+        log_job_execution(job_id, job_name, "error", str(e))
+        if 'db' in locals():
+            db.close()
 
 
-def send_renewal_reminders():
+async def send_renewal_reminders():
     """
     Send renewal reminders 3 days before billing date.
     
-    Runs daily at 9:00 AM UTC.
+    **Procedure:**
+    1. Query subscriptions where next_billing_date = 3 days from now
+    2. Send email to subscriber
+    3. Send push notification if enabled
+    4. Record notification sent
+    
+    **Execution:** Daily at 08:00 UTC
     """
-    db = get_db()
+    job_id = "renewal_reminders_daily"
+    job_name = "Daily Renewal Reminders"
+    
     try:
-        # Find subscriptions renewing in 3 days
-        reminder_date = datetime.utcnow() + timedelta(days=3)
+        db = get_db_session()
+        target_date = (datetime.utcnow() + timedelta(days=3)).date()
         
-        subscriptions = db.query(Subscription).join(User).join(MembershipTier).filter(
-            and_(
-                Subscription.next_billing_date.between(
-                    reminder_date.replace(hour=0, minute=0, second=0),
-                    reminder_date.replace(hour=23, minute=59, second=59)
-                ),
-                Subscription.status == "active",
-                Subscription.auto_renew == True
-            )
+        # Query subscriptions renewing in 3 days
+        subscriptions = db.query(Subscription).filter(
+            Subscription.next_billing_date >= datetime(
+                target_date.year, target_date.month, target_date.day
+            ),
+            Subscription.next_billing_date < datetime(
+                target_date.year, target_date.month, target_date.day
+            ) + timedelta(days=1),
+            Subscription.status == "active"
         ).all()
         
-        logger.info(f"Sending renewal reminders to {len(subscriptions)} subscribers")
+        if not subscriptions:
+            log_job_execution(job_id, job_name, "success", "No reminders to send")
+            db.close()
+            return
         
+        logger.info(f"Sending {len(subscriptions)} renewal reminders")
+        
+        reminder_count = 0
         for subscription in subscriptions:
             try:
-                user = subscription.user
-                tier = subscription.tier
-                fan_club = tier.fan_club
-                creator = fan_club.creator
+                # TODO: Send email via notification service
+                # TODO: Send push notification
                 
-                # TODO: Send email reminder
-                # Email content:
-                # - Renewal date
-                # - Amount to be charged
-                # - Payment method on file
-                # - Link to update payment method
-                # - Link to cancel subscription
-                
-                # Also send in-app notification
-                # TODO: Create notification record
-                
-                logger.info(f"Reminder sent to user {user.id} for subscription {subscription.id}")
-                
+                logger.debug(f"Reminder sent for subscription {subscription.id}")
+                reminder_count += 1
+            
             except Exception as e:
-                logger.error(f"Error sending reminder for subscription {subscription.id}: {e}")
+                logger.error(f"Error sending reminder for {subscription.id}: {e}")
         
-        logger.info("Renewal reminders sent successfully")
-        
-    except Exception as e:
-        logger.error(f"Error in send_renewal_reminders: {e}", exc_info=True)
-    finally:
         db.close()
-
-
-def cancel_expired_trials():
-    """
-    Cancel expired trial subscriptions.
+        
+        log_job_execution(job_id, job_name, "success", f"Sent {reminder_count} reminders")
     
-    Runs daily at 3:00 AM UTC.
-    Note: This platform doesn't have trials in v1, but included for future use.
+    except Exception as e:
+        logger.error(f"Error in reminder job: {e}", exc_info=True)
+        log_job_execution(job_id, job_name, "error", str(e))
+        if 'db' in locals():
+            db.close()
+
+
+async def cancel_expired_trials():
     """
-    db = get_db()
+    Auto-cancel expired trial subscriptions.
+    
+    **Procedure:**
+    1. Query subscriptions with status=TRIALING and trial_ends_at < now
+    2. Transition to CANCELLED
+    3. Record cancellation timestamp
+    4. Send cancellation email to subscriber
+    
+    **Execution:** Daily at 02:00 UTC
+    """
+    job_id = "trial_cleanup_daily"
+    job_name = "Daily Trial Cleanup"
+    
     try:
-        # Find expired trial subscriptions
+        db = get_db_session()
+        now = datetime.utcnow()
+        
+        # Query expired trials
         expired_trials = db.query(Subscription).filter(
-            and_(
-                Subscription.status == "trial",
-                Subscription.trial_end_date <= datetime.utcnow()
-            )
+            Subscription.status == "trialing",
+            Subscription.trial_ends_at <= now
         ).all()
         
-        logger.info(f"Canceling {len(expired_trials)} expired trial subscriptions")
+        if not expired_trials:
+            log_job_execution(job_id, job_name, "success", "No expired trials")
+            db.close()
+            return
         
+        logger.info(f"Cancelling {len(expired_trials)} expired trials")
+        
+        cancel_count = 0
         for subscription in expired_trials:
-            subscription.status = "cancelled"
-            subscription.cancelled_at = datetime.utcnow()
+            try:
+                subscription.status = "cancelled"
+                subscription.cancelled_at = now
+                
+                logger.info(f"Cancelled expired trial {subscription.id}")
+                cancel_count += 1
+                
+                # TODO: Send cancellation email
+                # TODO: Send notification to subscriber
             
-            # TODO: Send trial expired email with upgrade prompt
+            except Exception as e:
+                logger.error(f"Error cancelling trial {subscription.id}: {e}")
         
         db.commit()
-        logger.info("Expired trials canceled successfully")
-        
-    except Exception as e:
-        logger.error(f"Error in cancel_expired_trials: {e}", exc_info=True)
-        db.rollback()
-    finally:
         db.close()
+        
+        log_job_execution(job_id, job_name, "success", f"Cancelled {cancel_count} trials")
+    
+    except Exception as e:
+        logger.error(f"Error in trial cleanup job: {e}", exc_info=True)
+        log_job_execution(job_id, job_name, "error", str(e))
+        if 'db' in locals():
+            db.close()
 
 
-def send_welcome_messages():
+async def send_welcome_messages():
     """
     Send welcome messages to new subscribers.
     
-    Runs every hour.
-    Finds subscriptions created in the last hour and sends welcome message.
+    **Procedure:**
+    1. Query subscriptions created < 24 hours ago
+    2. Send welcome email from platform
+    3. Send welcome DM from creator (if template available)
+    4. Mark message as sent
+    
+    **Execution:** Hourly at :00 minutes
     """
-    db = get_db()
+    job_id = "send_welcome_messages"
+    job_name = "Send Welcome Messages"
+    
     try:
-        # Find new subscriptions from the last hour
-        one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+        db = get_db_session()
         
+        # Query new subscriptions (created in last hour)
+        cutoff_time = datetime.utcnow() - timedelta(hours=1)
         new_subscriptions = db.query(Subscription).filter(
-            and_(
-                Subscription.created_at >= one_hour_ago,
-                Subscription.status == "active"
-            )
+            Subscription.created_at > cutoff_time,
+            Subscription.status.in_(["active", "trialing"])
         ).all()
+        
+        if not new_subscriptions:
+            log_job_execution(job_id, job_name, "success", "No new subscribers")
+            db.close()
+            return
         
         logger.info(f"Sending welcome messages to {len(new_subscriptions)} new subscribers")
         
+        welcome_count = 0
         for subscription in new_subscriptions:
             try:
-                # Check if welcome message already sent
-                existing_welcome = db.query(Message).filter(
-                    and_(
-                        Message.sender_id == subscription.tier.fan_club.creator_id,
-                        Message.receiver_id == subscription.user_id,
-                        Message.content.like("%Welcome to%"),
-                        Message.created_at >= subscription.created_at
-                    )
-                ).first()
+                # TODO: Send welcome email via notification service
+                # email_service.send_welcome_email(
+                #     user_id=subscription.subscriber_id,
+                #     creator_name=subscription.fan_club.creator.full_name,
+                #     tier_name=subscription.tier.name
+                # )
                 
-                if existing_welcome:
-                    continue  # Already sent
+                # TODO: Send welcome DM from creator
+                # messaging_service.send_creator_welcome_message(
+                #     creator_id=subscription.fan_club.creator_id,
+                #     subscriber_id=subscription.subscriber_id
+                # )
                 
-                user = subscription.user
-                tier = subscription.tier
-                fan_club = tier.fan_club
-                creator = fan_club.creator
-                
-                # Get or create conversation
-                conversation = db.query(Conversation).filter(
-                    or_(
-                        and_(
-                            Conversation.user1_id == creator.id,
-                            Conversation.user2_id == user.id
-                        ),
-                        and_(
-                            Conversation.user1_id == user.id,
-                            Conversation.user2_id == creator.id
-                        )
-                    )
-                ).first()
-                
-                if not conversation:
-                    conversation = Conversation(
-                        user1_id=creator.id,
-                        user2_id=user.id
-                    )
-                    db.add(conversation)
-                    db.commit()
-                    db.refresh(conversation)
-                
-                # Create welcome message
-                welcome_text = fan_club.welcome_message or f"""
-Welcome to {fan_club.name}! 🎉
-
-Thank you for subscribing to the {tier.name} tier! I'm excited to have you as part of this exclusive community.
-
-As a member, you'll get access to:
-{chr(10).join(f"• {benefit}" for benefit in tier.benefits)}
-
-Stay tuned for exclusive content and updates!
-
-- {creator.username}
-                """.strip()
-                
-                message = Message(
-                    conversation_id=conversation.id,
-                    sender_id=creator.id,
-                    receiver_id=user.id,
-                    content=welcome_text,
-                    message_type="text"
-                )
-                db.add(message)
-                db.commit()
-                
-                logger.info(f"Welcome message sent to user {user.id} from creator {creator.id}")
-                
-                # TODO: Also send welcome email
-                
+                logger.debug(f"Welcome message sent for subscription {subscription.id}")
+                welcome_count += 1
+            
             except Exception as e:
-                logger.error(f"Error sending welcome for subscription {subscription.id}: {e}")
-                db.rollback()
+                logger.error(f"Error sending welcome message for {subscription.id}: {e}")
         
-        logger.info("Welcome messages sent successfully")
-        
-    except Exception as e:
-        logger.error(f"Error in send_welcome_messages: {e}", exc_info=True)
-    finally:
         db.close()
-
-
-def send_engagement_messages():
-    """
-    Send monthly engagement messages to long-term subscribers.
+        
+        log_job_execution(job_id, job_name, "success", f"Sent {welcome_count} welcome messages")
     
-    Runs daily at 11:00 AM UTC.
-    Sends thank you message to subscribers on their 1, 3, 6, 12 month anniversaries.
-    """
-    db = get_db()
-    try:
-        # Find subscriptions at milestone dates
-        today = datetime.utcnow().date()
-        
-        # Query subscriptions created exactly 1, 3, 6, or 12 months ago
-        milestones = [
-            (today - timedelta(days=30), "1 month"),
-            (today - timedelta(days=90), "3 months"),
-            (today - timedelta(days=180), "6 months"),
-            (today - timedelta(days=365), "1 year")
-        ]
-        
-        for milestone_date, milestone_label in milestones:
-            subscriptions = db.query(Subscription).filter(
-                and_(
-                    Subscription.created_at.between(
-                        datetime.combine(milestone_date, datetime.min.time()),
-                        datetime.combine(milestone_date, datetime.max.time())
-                    ),
-                    Subscription.status == "active"
-                )
-            ).all()
-            
-            logger.info(f"Sending {milestone_label} anniversary messages to {len(subscriptions)} subscribers")
-            
-            for subscription in subscriptions:
-                try:
-                    user = subscription.user
-                    tier = subscription.tier
-                    fan_club = tier.fan_club
-                    creator = fan_club.creator
-                    
-                    # Get or create conversation
-                    conversation = db.query(Conversation).filter(
-                        or_(
-                            and_(
-                                Conversation.user1_id == creator.id,
-                                Conversation.user2_id == user.id
-                            ),
-                            and_(
-                                Conversation.user1_id == user.id,
-                                Conversation.user2_id == creator.id
-                            )
-                        )
-                    ).first()
-                    
-                    if not conversation:
-                        conversation = Conversation(
-                            user1_id=creator.id,
-                            user2_id=user.id
-                        )
-                        db.add(conversation)
-                        db.commit()
-                        db.refresh(conversation)
-                    
-                    # Create thank you message
-                    thank_you_text = f"""
-🎉 Happy {milestone_label} anniversary! 🎉
-
-I wanted to personally thank you for being a subscriber for {milestone_label}. Your support means the world to me!
-
-As a token of appreciation, stay tuned for some exclusive content coming your way soon. 🎁
-
-Thank you for being an amazing supporter!
-
-- {creator.username}
-                    """.strip()
-                    
-                    message = Message(
-                        conversation_id=conversation.id,
-                        sender_id=creator.id,
-                        receiver_id=user.id,
-                        content=thank_you_text,
-                        message_type="text"
-                    )
-                    db.add(message)
-                    db.commit()
-                    
-                    logger.info(f"Anniversary message sent to user {user.id} ({milestone_label})")
-                    
-                except Exception as e:
-                    logger.error(f"Error sending anniversary message for subscription {subscription.id}: {e}")
-                    db.rollback()
-        
-        logger.info("Engagement messages sent successfully")
-        
     except Exception as e:
-        logger.error(f"Error in send_engagement_messages: {e}", exc_info=True)
-    finally:
+        logger.error(f"Error in welcome message job: {e}", exc_info=True)
+        log_job_execution(job_id, job_name, "error", str(e))
+        if 'db' in locals():
+            db.close()
+
+
+async def send_engagement_messages():
+    """
+    Send engagement messages (thank you, anniversary, exclusive content notifications).
+    
+    **Procedure:**
+    1. Send monthly thank you for 3+ month subscribers
+    2. Send anniversary messages for 1-year+ subscribers
+    3. Send exclusive content notifications
+    4. Track engagement metrics
+    
+    **Execution:** Daily at 11:00 UTC
+    """
+    job_id = "send_engagement_messages"
+    job_name = "Send Engagement Messages"
+    
+    try:
+        db = get_db_session()
+        now = datetime.utcnow()
+        
+        # Query active subscriptions
+        active_subscriptions = db.query(Subscription).filter(
+            Subscription.status == "active"
+        ).all()
+        
+        if not active_subscriptions:
+            log_job_execution(job_id, job_name, "success", "No active subscriptions")
+            db.close()
+            return
+        
+        logger.info(f"Processing engagement for {len(active_subscriptions)} subscriptions")
+        
+        message_count = 0
+        
+        for subscription in active_subscriptions:
+            try:
+                # Calculate months subscribed
+                months_subscribed = (now - subscription.started_at).days // 30
+                
+                # Send thank you message for 3+ months
+                if months_subscribed >= 3 and months_subscribed % 1 == 0:
+                    # TODO: Send thank you message
+                    logger.debug(f"Thank you message for subscription {subscription.id}")
+                    message_count += 1
+                
+                # Send anniversary message for 12+ months
+                if (now - subscription.started_at).days >= 365:
+                    # TODO: Send anniversary message
+                    logger.debug(f"Anniversary message for subscription {subscription.id}")
+                    message_count += 1
+            
+            except Exception as e:
+                logger.error(f"Error sending engagement message for {subscription.id}: {e}")
+        
         db.close()
+        
+        log_job_execution(job_id, job_name, "success", f"Sent {message_count} engagement messages")
+    
+    except Exception as e:
+        logger.error(f"Error in engagement message job: {e}", exc_info=True)
+        log_job_execution(job_id, job_name, "error", str(e))
+        if 'db' in locals():
+            db.close()

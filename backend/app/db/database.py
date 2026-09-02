@@ -64,7 +64,8 @@ def init_db():
         Conversation, ConversationParticipant, Message, MessageReadReceipt,
         MessageAttachment, BlockedUser, MessageReport, UserMessageSettings,
         FanClub, MembershipTier, Subscription, SubscriptionPayment,
-        ExclusiveContent, CreatorPayout
+        ExclusiveContent, CreatorPayout,
+        UserPreferenceProfile, BeatSimilarityCache, TrendingBeatCache, RecommendationLog
     )
     
     Base.metadata.create_all(bind=engine)

@@ -65,7 +65,7 @@ class MessagingService:
         if self._is_blocked(user_id, recipient_id) or self._is_blocked(recipient_id, user_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot create conversation with this user"
+                detail="Cannot create conversation with blocked user"
             )
         
         # Find existing conversation between these users
@@ -300,6 +300,16 @@ class MessagingService:
         Returns:
             Message object
         """
+        # Sanitize message content (Task 15.1)
+        from app.utils.sanitization import sanitize_message_content
+        try:
+            content = sanitize_message_content(content)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+        
         # Get or create conversation
         if conversation_id:
             conversation = self.get_conversation(conversation_id, sender_id)
@@ -419,6 +429,68 @@ class MessagingService:
             "next_cursor": next_cursor
         }
     
+    def get_messages_since(
+        self,
+        conversation_id: str,
+        user_id: str,
+        since_timestamp: str,
+        page_size: int = 50
+    ) -> Dict:
+        """
+        Get messages since a given ISO timestamp (polling fallback)
+        
+        Args:
+            conversation_id: Conversation ID
+            user_id: Current user ID
+            since_timestamp: ISO 8601 timestamp string
+            page_size: Max messages to return
+            
+        Returns:
+            Dict with messages and pagination info
+        """
+        from datetime import datetime
+        
+        # Verify access
+        self.get_conversation(conversation_id, user_id)
+        
+        # Parse timestamp
+        try:
+            since_dt = datetime.fromisoformat(since_timestamp.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            since_dt = datetime.utcnow()
+        
+        # Query messages since timestamp
+        messages = (
+            self.db.query(Message)
+            .filter(
+                Message.conversation_id == conversation_id,
+                Message.deleted_at.is_(None),
+                Message.created_at > since_dt
+            )
+            .options(
+                joinedload(Message.sender),
+                joinedload(Message.attachments),
+                joinedload(Message.read_receipts)
+            )
+            .order_by(Message.created_at.asc())
+            .limit(page_size + 1)
+            .all()
+        )
+        
+        has_more = len(messages) > page_size
+        if has_more:
+            messages = messages[:page_size]
+        
+        next_cursor = messages[-1].id if has_more and messages else None
+        
+        message_responses = [self._build_message_response(msg) for msg in messages]
+        
+        return {
+            "messages": message_responses,
+            "has_more": has_more,
+            "next_cursor": next_cursor
+        }
+
     def search_messages(
         self,
         user_id: str,

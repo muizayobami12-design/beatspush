@@ -7,7 +7,7 @@ from datetime import datetime
 import uuid
 from typing import Tuple
 
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, UserTier
 from app.schemas.user import (
     UserRegisterRequest,
     UserLoginRequest,
@@ -71,6 +71,7 @@ class AuthService:
             email=user_data.email,
             hashed_password=hash_password(user_data.password),
             role=user_data.role,
+            tier=UserTier.FREE,  # All new users start with free tier
             full_name=user_data.full_name,
             username=user_data.username,
             is_active=True,
@@ -98,7 +99,9 @@ class AuthService:
         
         return AuthResponse(
             user=UserResponse.from_orm(new_user),
-            tokens=tokens
+            access_token=tokens.access_token,
+            refresh_token=tokens.refresh_token,
+            token_type=tokens.token_type
         )
     
     @staticmethod
@@ -148,7 +151,9 @@ class AuthService:
         
         return AuthResponse(
             user=UserResponse.from_orm(user),
-            tokens=tokens
+            access_token=tokens.access_token,
+            refresh_token=tokens.refresh_token,
+            token_type=tokens.token_type
         )
     
     @staticmethod

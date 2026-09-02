@@ -5,7 +5,7 @@ Task 7.1: Social Feed
 Endpoints for social feed, posts, comments, follows, etc.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
@@ -64,20 +64,20 @@ def post_to_response(post: Post, current_user_id: str, db: Session) -> PostRespo
     is_liked = SocialService.is_post_liked(db, post.id, current_user_id)
     
     # Check if bookmarked
-    from app.models.social import PostBookmark
-    is_bookmarked = db.query(PostBookmark).filter(
-        PostBookmark.post_id == post.id,
-        PostBookmark.user_id == current_user_id
+    from app.models.social import PostSave
+    is_bookmarked = db.query(PostSave).filter(
+        PostSave.post_id == post.id,
+        PostSave.user_id == current_user_id
     ).first() is not None
     
     return PostResponse(
         id=post.id,
         user=user,
-        post_type=post.post_type,
+        post_type=post.type,
         content=post.content,
-        media_url=post.media_url,
+        media_url=post.media_urls[0] if post.media_urls else None,
         track=track,
-        event_date=post.event_date,
+        event_date=post.event_data.get("date") if post.event_data else None,
         poll_options=poll_options,
         poll_ends_at=post.poll_ends_at,
         like_count=post.like_count,
@@ -90,6 +90,85 @@ def post_to_response(post: Post, current_user_id: str, db: Session) -> PostRespo
         created_at=post.created_at,
         updated_at=post.updated_at
     )
+
+
+# ================== MEDIA UPLOAD ENDPOINTS ==================
+
+@router.post("/posts/upload", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def upload_post_media(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Upload media file for a post (image or video).
+    
+    **Supported Types:**
+    - Images: jpg, jpeg, png, gif, webp (max 10MB)
+    - Videos: mp4, mov, webm (max 100MB)
+    
+    **Returns:**
+    - `media_url`: URL to use in the post's media_url field
+    - `media_type`: 'image' or 'video'
+    - `file_size`: File size in bytes
+    """
+    # Validate file type
+    ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+    ALLOWED_VIDEO_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
+    MAX_IMAGE_SIZE = 10 * 1024 * 1024   # 10MB
+    MAX_VIDEO_SIZE = 100 * 1024 * 1024  # 100MB
+    
+    content_type = file.content_type or ""
+    
+    if content_type in ALLOWED_IMAGE_TYPES:
+        media_type = "image"
+        max_size = MAX_IMAGE_SIZE
+    elif content_type in ALLOWED_VIDEO_TYPES:
+        media_type = "video"
+        max_size = MAX_VIDEO_SIZE
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file type: {content_type}. Allowed: images (jpg, png, gif, webp) and videos (mp4, mov, webm)"
+        )
+    
+    # Read and validate file size
+    content = await file.read()
+    file_size = len(content)
+    
+    if file_size > max_size:
+        max_mb = max_size // (1024 * 1024)
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File too large. Maximum size for {media_type} is {max_mb}MB"
+        )
+    
+    # Upload using existing file storage service
+    try:
+        from app.services.file_storage import FileStorageService
+        import uuid
+        
+        storage_service = FileStorageService()
+        file_ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "bin"
+        storage_key = f"social/posts/{current_user.id}/{uuid.uuid4()}.{file_ext}"
+        
+        media_url = await storage_service.upload_bytes(
+            data=content,
+            key=storage_key,
+            content_type=content_type
+        )
+        
+        return {
+            "media_url": media_url,
+            "media_type": media_type,
+            "file_size": file_size,
+            "filename": file.filename
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload file: {str(e)}"
+        )
 
 
 # ================== POST ENDPOINTS ==================
@@ -394,6 +473,73 @@ def create_comment(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create comment: {str(e)}")
+
+
+@router.get("/posts/{post_id}/comments", response_model=List[CommentResponse])
+def get_post_comments(
+    post_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get comments for a post with threading support."""
+    
+    try:
+        comments, total = SocialService.get_post_comments(db, post_id, page, page_size)
+        
+        comment_responses = []
+        for comment in comments:
+            user = UserBasic(
+                id=comment.user.id,
+                full_name=comment.user.full_name,
+                username=comment.user.username,
+                role=comment.user.role
+            )
+            
+            # Get replies for top-level comments
+            reply_responses = []
+            if not comment.parent_comment_id:
+                replies = SocialService.get_comment_replies(db, comment.id)
+                for reply in replies:
+                    reply_user = UserBasic(
+                        id=reply.user.id,
+                        full_name=reply.user.full_name,
+                        username=reply.user.username,
+                        role=reply.user.role
+                    )
+                    reply_responses.append(CommentResponse(
+                        id=reply.id,
+                        post_id=reply.post_id,
+                        user=reply_user,
+                        parent_comment_id=reply.parent_comment_id,
+                        content=reply.content,
+                        like_count=reply.like_count,
+                        is_edited=reply.is_edited,
+                        created_at=reply.created_at,
+                        updated_at=reply.updated_at,
+                        replies=[]
+                    ))
+            
+            comment_responses.append(CommentResponse(
+                id=comment.id,
+                post_id=comment.post_id,
+                user=user,
+                parent_comment_id=comment.parent_comment_id,
+                content=comment.content,
+                like_count=comment.like_count,
+                is_edited=comment.is_edited,
+                created_at=comment.created_at,
+                updated_at=comment.updated_at,
+                replies=reply_responses
+            ))
+        
+        return comment_responses
+    
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get comments: {str(e)}")
 
 
 @router.put("/comments/{comment_id}", response_model=CommentResponse)

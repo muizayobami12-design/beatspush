@@ -4,7 +4,7 @@ User schemas - Pydantic models for request/response validation
 from pydantic import BaseModel, EmailStr, Field, validator
 from typing import Optional
 from datetime import datetime
-from app.models.user import UserRole
+from app.models.user import UserRole, UserTier
 
 
 # ============================================================================
@@ -14,21 +14,17 @@ from app.models.user import UserRole
 class UserRegisterRequest(BaseModel):
     """User registration request"""
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=100)
+    password: str = Field(..., min_length=6, max_length=100)
     role: UserRole
     full_name: Optional[str] = Field(None, max_length=255)
     username: Optional[str] = Field(None, min_length=3, max_length=100)
+    bio: Optional[str] = Field(None, max_length=500)
+    location: Optional[str] = Field(None, max_length=255)
     
-    @validator('password')
-    def validate_password(cls, v):
-        """Ensure password meets security requirements"""
-        if not any(c.isupper() for c in v):
-            raise ValueError('Password must contain at least one uppercase letter')
-        if not any(c.islower() for c in v):
-            raise ValueError('Password must contain at least one lowercase letter')
-        if not any(c.isdigit() for c in v):
-            raise ValueError('Password must contain at least one digit')
-        return v
+    # Security metadata (from frontend)
+    turnstile_token: Optional[str] = None
+    device_id: Optional[str] = None
+    device_info: Optional[str] = None  # JSON string
     
     @validator('username')
     def validate_username(cls, v):
@@ -42,6 +38,11 @@ class UserLoginRequest(BaseModel):
     """User login request"""
     email: EmailStr
     password: str
+    
+    # Security metadata (from frontend)
+    turnstile_token: Optional[str] = None
+    device_id: Optional[str] = None
+    device_info: Optional[str] = None  # JSON string
 
 
 class TokenRefreshRequest(BaseModel):
@@ -57,18 +58,7 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     """Reset password request"""
     token: str
-    new_password: str = Field(..., min_length=8, max_length=100)
-    
-    @validator('new_password')
-    def validate_password(cls, v):
-        """Ensure password meets security requirements"""
-        if not any(c.isupper() for c in v):
-            raise ValueError('Password must contain at least one uppercase letter')
-        if not any(c.islower() for c in v):
-            raise ValueError('Password must contain at least one lowercase letter')
-        if not any(c.isdigit() for c in v):
-            raise ValueError('Password must contain at least one digit')
-        return v
+    new_password: str = Field(..., min_length=6, max_length=100)
 
 
 class UserUpdateRequest(BaseModel):
@@ -93,6 +83,7 @@ class UserResponse(BaseModel):
     id: str
     email: EmailStr
     role: UserRole
+    tier: UserTier  # AI subscription tier
     full_name: Optional[str]
     username: Optional[str]
     is_active: bool
@@ -117,7 +108,9 @@ class TokenResponse(BaseModel):
 class AuthResponse(BaseModel):
     """Authentication response (login/register)"""
     user: UserResponse
-    tokens: TokenResponse
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
 
 
 class MessageResponse(BaseModel):

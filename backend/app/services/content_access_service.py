@@ -1,99 +1,123 @@
 """
-Content Access Service - Business logic for exclusive content gating
-Tasks 9.1-9.7: Content access control and tier validation
+Content Access Service - Content gating and exclusive content management
+Tasks 9.1-9.7: Exclusive content access control by membership tier
+
+Manages:
+- Marking content as exclusive/tier-gated
+- Checking user access to exclusive content
+- Retrieving exclusive content lists
+- Removing exclusivity
+- Teaser/preview logic for locked content
+- Integration with Post and Track models
 """
-from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import and_, func
 from fastapi import HTTPException, status
 from typing import Optional, List, Dict, Tuple
 from datetime import datetime
 import uuid
+import logging
 
-from app.models.fan_club import (
-    ExclusiveContent, FanClub, Subscription, MembershipTier
-)
-from app.models.social import Post
-from app.models.track import Track
+from app.models.fan_club import ExclusiveContent, Subscription, MembershipTier, FanClub
+from app.models.social import Post, PostVisibility
+from app.models.track import Track, TrackVisibility
+from app.models.user import User
 from app.schemas.fan_club import (
-    ExclusiveContentCreate, ExclusiveContentResponse,
-    ContentAccessResponse
+    ExclusiveContentCreate, ExclusiveContentResponse, ContentAccessResponse
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ContentAccessService:
-    """Service for managing exclusive content access"""
+    """Exclusive content management and access control
+    
+    Handles:
+    - Marking content as tier-exclusive
+    - Access verification by subscription
+    - Exclusive content retrieval
+    - Teaser/preview content
+    - Content exclusivity removal
+    """
     
     def __init__(self, db: Session):
         self.db = db
     
     # ========================================================================
-    # CONTENT GATING
+    # MARK CONTENT EXCLUSIVE - TASK 9.1
     # ========================================================================
     
     def mark_content_exclusive(
         self,
-        creator_id: str,
-        data: ExclusiveContentCreate
+        fan_club_id: str,
+        content_type: str,
+        content_id: str,
+        minimum_tier_level: int,
+        teaser_text: Optional[str] = None,
+        preview_url: Optional[str] = None
     ) -> ExclusiveContent:
         """
-        Mark content as tier-exclusive
+        Mark content as exclusive/tier-gated (Task 9.1).
+        
+        Business Rules (BR-9.1):
+        - Only creator can mark their own content exclusive
+        - Content type must be valid (post, track, video, image, event)
+        - Tier level must be 1-3 (Bronze, Silver, Gold)
+        - Only one exclusivity per content (prevent duplicates)
+        - Create ExclusiveContent record
+        - Content still visible, but access gated
         
         Args:
-            creator_id: Creator user ID
-            data: Exclusive content data
+            fan_club_id: Creator's fan club
+            content_type: Type of content (post, track, video, image, event)
+            content_id: Content ID
+            minimum_tier_level: Minimum tier to access (1, 2, or 3)
+            teaser_text: Optional preview text (first 20%)
+            preview_url: Optional thumbnail for locked content
             
         Returns:
-            ExclusiveContent object
+            ExclusiveContent record
+            
+        Raises:
+            HTTPException 404: Fan club not found
+            HTTPException 400: Invalid tier level or duplicate exclusivity
         """
-        # Get creator's fan club
+        # Validate fan club exists
         fan_club = (
             self.db.query(FanClub)
-            .filter(FanClub.creator_id == creator_id)
+            .filter(FanClub.id == fan_club_id)
             .first()
         )
         
         if not fan_club:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="You don't have a fan club. Create one first."
+                detail="Fan club not found"
             )
         
-        if not fan_club.is_active:
+        # Validate tier level
+        if minimum_tier_level < 1 or minimum_tier_level > 3:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Your fan club is not active"
+                detail="Tier level must be 1 (Bronze), 2 (Silver), or 3 (Gold)"
             )
         
-        # Verify tier level exists
-        tier = (
-            self.db.query(MembershipTier)
-            .filter(
-                MembershipTier.fan_club_id == fan_club.id,
-                MembershipTier.tier_level == data.minimum_tier_level,
-                MembershipTier.is_active == True
-            )
-            .first()
-        )
-        
-        if not tier:
+        # Validate content type
+        valid_types = ["post", "track", "video", "image", "event"]
+        if content_type not in valid_types:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"No active tier at level {data.minimum_tier_level} found"
+                detail=f"Invalid content type. Must be one of: {', '.join(valid_types)}"
             )
         
-        # Verify content exists and creator owns it
-        self._verify_content_ownership(
-            content_type=data.content_type.value,
-            content_id=data.content_id,
-            creator_id=creator_id
-        )
-        
-        # Check if content is already exclusive
+        # Check for existing exclusivity
         existing = (
             self.db.query(ExclusiveContent)
             .filter(
-                ExclusiveContent.content_type == data.content_type.value,
-                ExclusiveContent.content_id == data.content_id
+                and_(
+                    ExclusiveContent.content_type == content_type,
+                    ExclusiveContent.content_id == content_id
+                )
             )
             .first()
         )
@@ -104,373 +128,588 @@ class ContentAccessService:
                 detail="This content is already marked as exclusive"
             )
         
-        # Generate teaser if not provided
-        teaser_text = data.teaser_text
-        if not teaser_text:
-            teaser_text = self._generate_teaser(
-                content_type=data.content_type.value,
-                content_id=data.content_id
-            )
-        
         # Create exclusive content record
-        exclusive_content = ExclusiveContent(
+        exclusive = ExclusiveContent(
             id=str(uuid.uuid4()),
-            fan_club_id=fan_club.id,
-            content_type=data.content_type.value,
-            content_id=data.content_id,
-            minimum_tier_level=data.minimum_tier_level,
+            fan_club_id=fan_club_id,
+            content_type=content_type,
+            content_id=content_id,
+            minimum_tier_level=minimum_tier_level,
             teaser_text=teaser_text,
-            preview_url=data.preview_url,
-            view_count=0,
-            engagement_count=0
+            preview_url=preview_url,
+            created_at=datetime.utcnow()
         )
         
-        self.db.add(exclusive_content)
+        self.db.add(exclusive)
         self.db.commit()
-        self.db.refresh(exclusive_content)
+        self.db.refresh(exclusive)
         
-        return exclusive_content
-    
-    def remove_exclusivity(
-        self,
-        content_type: str,
-        content_id: str,
-        creator_id: str
-    ) -> bool:
-        """
-        Remove exclusive status from content (make public)
+        logger.info(f"✓ Content marked exclusive: {content_type}/{content_id} (tier {minimum_tier_level})")
         
-        Args:
-            content_type: Type of content
-            content_id: Content ID
-            creator_id: Creator user ID (for authorization)
-            
-        Returns:
-            True if removed successfully
-        """
-        exclusive_content = (
-            self.db.query(ExclusiveContent)
-            .filter(
-                ExclusiveContent.content_type == content_type,
-                ExclusiveContent.content_id == content_id
-            )
-            .first()
-        )
-        
-        if not exclusive_content:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Exclusive content record not found"
-            )
-        
-        # Verify creator owns the fan club
-        fan_club = (
-            self.db.query(FanClub)
-            .filter(FanClub.id == exclusive_content.fan_club_id)
-            .first()
-        )
-        
-        if not fan_club or fan_club.creator_id != creator_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to modify this content"
-            )
-        
-        self.db.delete(exclusive_content)
-        self.db.commit()
-        
-        return True
+        return exclusive
     
     # ========================================================================
-    # ACCESS CHECKS
+    # CHECK CONTENT ACCESS - TASK 9.2
     # ========================================================================
     
     def check_content_access(
         self,
+        fan_club_id: str,
         user_id: str,
         content_type: str,
         content_id: str
-    ) -> ContentAccessResponse:
+    ) -> Tuple[bool, Optional[str]]:
         """
-        Check if user has access to exclusive content
+        Verify if user has access to exclusive content (Task 9.2).
+        
+        Business Rules (BR-9.2):
+        - Check if content is exclusive
+        - If not exclusive, return access=True
+        - If exclusive, check user's subscription tier
+        - User must have active subscription with tier >= minimum_tier_level
+        - Creator always has access to own content
+        - Return (has_access, reason)
         
         Args:
-            user_id: User ID
-            content_type: Type of content (post, track, video, etc.)
+            fan_club_id: Fan club ID
+            user_id: User checking access
+            content_type: Type of content (post, track)
             content_id: Content ID
             
         Returns:
-            ContentAccessResponse with access decision
+            Tuple of (has_access: bool, reason: Optional[str])
+            - (True, None) if access granted
+            - (False, "reason") if denied
         """
-        # Check if content is exclusive
-        exclusive_content = (
+        # Check if content is marked exclusive
+        exclusive = (
             self.db.query(ExclusiveContent)
             .filter(
-                ExclusiveContent.content_type == content_type,
-                ExclusiveContent.content_id == content_id
+                and_(
+                    ExclusiveContent.content_type == content_type,
+                    ExclusiveContent.content_id == content_id
+                )
             )
             .first()
         )
         
-        # Content is public (not exclusive)
-        if not exclusive_content:
-            return ContentAccessResponse(
-                has_access=True,
-                reason=None,
-                required_tier_level=None,
-                current_tier_level=None,
-                unlock_url=None
-            )
+        # If not exclusive, grant access
+        if not exclusive:
+            return True, None
         
-        # Check if user is the creator (creators always have access to their own content)
+        # Check if user is the creator
         fan_club = (
             self.db.query(FanClub)
-            .filter(FanClub.id == exclusive_content.fan_club_id)
+            .filter(FanClub.id == fan_club_id)
             .first()
         )
         
         if fan_club and fan_club.creator_id == user_id:
-            return ContentAccessResponse(
-                has_access=True,
-                reason="Creator access",
-                required_tier_level=exclusive_content.minimum_tier_level,
-                current_tier_level=999,  # Creator has highest level
-                unlock_url=None
-            )
+            logger.info(f"✓ Creator access granted: {user_id}")
+            return True, None
         
-        # Check if user has active subscription at required tier level
+        # Check user's subscription to this fan club
         subscription = (
             self.db.query(Subscription)
-            .join(MembershipTier, Subscription.tier_id == MembershipTier.id)
+            .options(joinedload(Subscription.tier))
             .filter(
-                Subscription.fan_club_id == exclusive_content.fan_club_id,
-                Subscription.subscriber_id == user_id,
-                Subscription.status.in_(["active", "trialing"]),
-                MembershipTier.tier_level >= exclusive_content.minimum_tier_level
+                and_(
+                    Subscription.fan_club_id == fan_club_id,
+                    Subscription.subscriber_id == user_id,
+                    Subscription.status.in_(["active", "trialing"])
+                )
             )
             .first()
         )
         
-        if subscription:
-            # User has access
-            return ContentAccessResponse(
-                has_access=True,
-                reason=None,
-                required_tier_level=exclusive_content.minimum_tier_level,
-                current_tier_level=subscription.tier.tier_level,
-                unlock_url=None
-            )
+        # No subscription
+        if not subscription:
+            required_tier = self._get_tier_name(exclusive.minimum_tier_level)
+            logger.warning(f"✗ No subscription: {user_id} requires {required_tier} tier")
+            return False, f"Requires {required_tier} subscription to access"
         
-        # User doesn't have access - check if they have lower tier
-        lower_tier_sub = (
-            self.db.query(Subscription)
-            .join(MembershipTier, Subscription.tier_id == MembershipTier.id)
-            .filter(
-                Subscription.fan_club_id == exclusive_content.fan_club_id,
-                Subscription.subscriber_id == user_id,
-                Subscription.status.in_(["active", "trialing"])
-            )
-            .first()
-        )
+        # Check tier level
+        if subscription.tier.tier_level < exclusive.minimum_tier_level:
+            current_tier = self._get_tier_name(subscription.tier.tier_level)
+            required_tier = self._get_tier_name(exclusive.minimum_tier_level)
+            logger.warning(f"✗ Insufficient tier: {user_id} has {current_tier}, requires {required_tier}")
+            return False, f"Upgrade to {required_tier} to access this content"
         
-        if lower_tier_sub:
-            # User has subscription but lower tier
-            current_tier = lower_tier_sub.tier.tier_level
-            reason = f"This content requires tier level {exclusive_content.minimum_tier_level}. You have tier {current_tier}. Upgrade to access."
-        else:
-            # User not subscribed at all
-            current_tier = 0
-            reason = f"This content is exclusive to tier {exclusive_content.minimum_tier_level} members. Subscribe to unlock."
-        
-        return ContentAccessResponse(
-            has_access=False,
-            reason=reason,
-            required_tier_level=exclusive_content.minimum_tier_level,
-            current_tier_level=current_tier,
-            unlock_url=f"/fan-clubs/{fan_club.id}/subscribe"
-        )
+        # Access granted
+        logger.info(f"✓ Access granted: {user_id} with {self._get_tier_name(subscription.tier.tier_level)} tier")
+        return True, None
+    
+    # ========================================================================
+    # GET EXCLUSIVE CONTENT - TASK 9.3
+    # ========================================================================
     
     def get_exclusive_content(
         self,
         fan_club_id: str,
-        tier_level: Optional[int] = None,
-        content_type: Optional[str] = None
+        content_type: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0
     ) -> List[ExclusiveContent]:
         """
-        Get exclusive content for a fan club
+        Get list of creator's exclusive content (Task 9.3).
+        
+        Business Rules (BR-9.3):
+        - Only creator can view their exclusive content list
+        - Return paginated results
+        - Optional filter by content type
+        - Include view/engagement counts
+        - Ordered by created_at (newest first)
         
         Args:
-            fan_club_id: Fan club ID
-            tier_level: Filter by tier level
-            content_type: Filter by content type
+            fan_club_id: Creator's fan club
+            content_type: Optional filter (post, track, video, image, event)
+            limit: Page size (max 100)
+            offset: Page offset
             
         Returns:
-            List of ExclusiveContent objects
+            List of ExclusiveContent records
         """
         query = (
             self.db.query(ExclusiveContent)
             .filter(ExclusiveContent.fan_club_id == fan_club_id)
         )
         
-        if tier_level is not None:
-            query = query.filter(ExclusiveContent.minimum_tier_level == tier_level)
-        
+        # Optional content type filter
         if content_type:
             query = query.filter(ExclusiveContent.content_type == content_type)
         
-        # Order by most recent
-        query = query.order_by(ExclusiveContent.created_at.desc())
+        # Get total count before pagination
+        total = query.count()
         
-        return query.all()
+        # Apply pagination
+        limit = min(limit, 100)  # Cap at 100
+        exclusive_content = query.order_by(
+            ExclusiveContent.created_at.desc()
+        ).limit(limit).offset(offset).all()
+        
+        logger.info(f"Retrieved {len(exclusive_content)} exclusive content items for fan club {fan_club_id}")
+        
+        return exclusive_content
     
     # ========================================================================
-    # CONTENT INTEGRATION
+    # REMOVE EXCLUSIVITY - TASK 9.4
     # ========================================================================
     
-    def get_content_with_access_check(
-        self,
-        user_id: str,
-        content_type: str,
-        content_id: str
-    ) -> Dict:
+    def remove_exclusivity(self, exclusive_content_id: str) -> bool:
         """
-        Get content with access check applied
+        Remove exclusivity and make content public (Task 9.4).
         
-        Returns content with access information and teaser if locked
+        Business Rules (BR-9.4):
+        - Delete ExclusiveContent record
+        - Content becomes publicly accessible
+        - Creator can do this anytime
+        - Cannot reverse (need to mark exclusive again)
         
         Args:
-            user_id: User ID
-            content_type: Content type
-            content_id: Content ID
+            exclusive_content_id: ID of exclusive content record
             
         Returns:
-            Dict with content and access info
+            True if removed successfully
+            
+        Raises:
+            HTTPException 404: Exclusive content not found
         """
-        # Check access
-        access_response = self.check_content_access(user_id, content_type, content_id)
+        exclusive = (
+            self.db.query(ExclusiveContent)
+            .filter(ExclusiveContent.id == exclusive_content_id)
+            .first()
+        )
         
-        # Get content
-        content = self._get_content(content_type, content_id)
+        if not exclusive:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Exclusive content not found"
+            )
+        
+        content_info = f"{exclusive.content_type}/{exclusive.content_id}"
+        
+        self.db.delete(exclusive)
+        self.db.commit()
+        
+        logger.info(f"✓ Exclusivity removed: {content_info}")
+        
+        return True
+    
+    # ========================================================================
+    # INTEGRATE WITH POST MODEL - TASK 9.5
+    # ========================================================================
+    
+    def check_post_access(
+        self,
+        post_id: str,
+        user_id: Optional[str] = None
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        """
+        Check if user can access a post (Task 9.5).
+        
+        Business Rules (BR-9.5):
+        - Integrate access check with Post model
+        - If post is public and not exclusive: access granted
+        - If post is exclusive: verify subscription
+        - Return (access, reason, teaser)
+        - Include teaser text if access denied
+        
+        Args:
+            post_id: Post ID
+            user_id: User ID (None for anonymous)
+            
+        Returns:
+            Tuple of (has_access, deny_reason, teaser_text)
+        """
+        # Get post
+        post = (
+            self.db.query(Post)
+            .options(joinedload(Post.user))
+            .filter(Post.id == post_id)
+            .first()
+        )
+        
+        if not post:
+            return False, "Post not found", None
+        
+        # If deleted, no access
+        if post.is_deleted:
+            return False, "Post has been deleted", None
+        
+        # Check if post is exclusive
+        has_access, deny_reason = self.check_content_access(
+            fan_club_id=post.user.fan_club.id if post.user.fan_club else None,
+            user_id=user_id,
+            content_type="post",
+            content_id=post_id
+        )
+        
+        if has_access:
+            return True, None, None
+        
+        # Get teaser text if access denied
+        exclusive = (
+            self.db.query(ExclusiveContent)
+            .filter(
+                and_(
+                    ExclusiveContent.content_type == "post",
+                    ExclusiveContent.content_id == post_id
+                )
+            )
+            .first()
+        )
+        
+        teaser = exclusive.teaser_text if exclusive else None
+        
+        return False, deny_reason, teaser
+    
+    # ========================================================================
+    # INTEGRATE WITH TRACK MODEL - TASK 9.6
+    # ========================================================================
+    
+    def check_track_access(
+        self,
+        track_id: str,
+        user_id: Optional[str] = None
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        """
+        Check if user can access a track (Task 9.6).
+        
+        Business Rules (BR-9.6):
+        - Integrate access check with Track model
+        - If track is public and not exclusive: access granted
+        - If track is exclusive: verify subscription
+        - Return (access, reason, teaser)
+        - Include preview_url if access denied
+        
+        Args:
+            track_id: Track ID
+            user_id: User ID (None for anonymous)
+            
+        Returns:
+            Tuple of (has_access, deny_reason, preview_url)
+        """
+        # Get track
+        track = (
+            self.db.query(Track)
+            .options(joinedload(Track.user))
+            .filter(Track.id == track_id)
+            .first()
+        )
+        
+        if not track:
+            return False, "Track not found", None
+        
+        # Check if track is exclusive
+        has_access, deny_reason = self.check_content_access(
+            fan_club_id=track.user.fan_club.id if track.user.fan_club else None,
+            user_id=user_id,
+            content_type="track",
+            content_id=track_id
+        )
+        
+        if has_access:
+            return True, None, None
+        
+        # Get preview URL if access denied
+        exclusive = (
+            self.db.query(ExclusiveContent)
+            .filter(
+                and_(
+                    ExclusiveContent.content_type == "track",
+                    ExclusiveContent.content_id == track_id
+                )
+            )
+            .first()
+        )
+        
+        preview_url = exclusive.preview_url if exclusive else None
+        
+        return False, deny_reason, preview_url
+    
+    # ========================================================================
+    # TEASER/PREVIEW LOGIC - TASK 9.7
+    # ========================================================================
+    
+    def get_content_with_teaser(
+        self,
+        content_type: str,
+        content_id: str,
+        user_id: Optional[str] = None
+    ) -> Dict:
+        """
+        Get content with teaser/preview if access denied (Task 9.7).
+        
+        Business Rules (BR-9.7):
+        - If user has access: return full content
+        - If user denied access: return teaser (first 20% or preview)
+        - Show unlock prompt with required tier
+        - Support both Post and Track content types
+        - Return structure includes access status and content
+        
+        Args:
+            content_type: "post" or "track"
+            content_id: Content ID
+            user_id: User ID (None for anonymous)
+            
+        Returns:
+            Dict with full content or teaser + unlock info
+        """
+        if content_type == "post":
+            has_access, deny_reason, teaser = self.check_post_access(content_id, user_id)
+            content = self._get_post_content(content_id, has_access)
+        elif content_type == "track":
+            has_access, deny_reason, preview_url = self.check_track_access(content_id, user_id)
+            content = self._get_track_content(content_id, has_access, preview_url)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid content type"
+            )
         
         if not content:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Content not found"
+                detail=f"{content_type.capitalize()} not found"
             )
         
-        # If no access, return teaser only
-        if not access_response.has_access:
-            exclusive_content = (
-                self.db.query(ExclusiveContent)
-                .filter(
+        # Get exclusive info for unlock prompt
+        exclusive = (
+            self.db.query(ExclusiveContent)
+            .filter(
+                and_(
                     ExclusiveContent.content_type == content_type,
                     ExclusiveContent.content_id == content_id
                 )
-                .first()
             )
-            
-            return {
-                "content": {
-                    "id": content_id,
-                    "type": content_type,
-                    "teaser": exclusive_content.teaser_text if exclusive_content else "Exclusive content",
-                    "preview_url": exclusive_content.preview_url if exclusive_content else None
-                },
-                "access": access_response.dict(),
-                "locked": True
-            }
+            .first()
+        )
         
-        # User has access - return full content
-        # Track view (increment view_count)
-        self._increment_view_count(content_type, content_id)
-        
-        return {
-            "content": self._serialize_content(content_type, content),
-            "access": access_response.dict(),
-            "locked": False
+        result = {
+            "id": content_id,
+            "type": content_type,
+            "has_access": has_access,
+            "content": content if has_access else None,
+            "is_exclusive": exclusive is not None
         }
+        
+        # Add unlock info if denied
+        if not has_access and exclusive:
+            required_tier = self._get_tier_name(exclusive.minimum_tier_level)
+            result.update({
+                "unlock_reason": deny_reason,
+                "unlock_prompt": f"Unlock with {required_tier} membership",
+                "minimum_tier_level": exclusive.minimum_tier_level,
+                "teaser": {
+                    "text": exclusive.teaser_text or "Subscribe to unlock",
+                    "preview_url": exclusive.preview_url
+                }
+            })
+        
+        return result
+    
+    # ========================================================================
+    # ENGAGEMENT TRACKING
+    # ========================================================================
+    
+    def track_exclusive_view(
+        self,
+        exclusive_content_id: str
+    ) -> None:
+        """
+        Track view of exclusive content for analytics.
+        
+        Args:
+            exclusive_content_id: ID of viewed exclusive content
+        """
+        exclusive = (
+            self.db.query(ExclusiveContent)
+            .filter(ExclusiveContent.id == exclusive_content_id)
+            .first()
+        )
+        
+        if exclusive:
+            exclusive.view_count = (exclusive.view_count or 0) + 1
+            self.db.commit()
+    
+    def track_exclusive_engagement(
+        self,
+        exclusive_content_id: str,
+        engagement_type: str  # like, comment, share
+    ) -> None:
+        """
+        Track engagement with exclusive content.
+        
+        Args:
+            exclusive_content_id: ID of engaged content
+            engagement_type: Type of engagement
+        """
+        exclusive = (
+            self.db.query(ExclusiveContent)
+            .filter(ExclusiveContent.id == exclusive_content_id)
+            .first()
+        )
+        
+        if exclusive:
+            exclusive.engagement_count = (exclusive.engagement_count or 0) + 1
+            self.db.commit()
     
     # ========================================================================
     # HELPER METHODS
     # ========================================================================
     
-    def _verify_content_ownership(
+    def _get_tier_name(self, tier_level: int) -> str:
+        """Get human-readable tier name"""
+        tier_names = {
+            1: "Bronze",
+            2: "Silver",
+            3: "Gold"
+        }
+        return tier_names.get(tier_level, f"Tier {tier_level}")
+    
+    def _get_post_content(
         self,
-        content_type: str,
-        content_id: str,
-        creator_id: str
-    ) -> bool:
-        """Verify creator owns the content"""
-        if content_type == "post":
-            content = self.db.query(Post).filter(Post.id == content_id).first()
-            if not content or content.user_id != creator_id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You don't own this post"
-                )
-        elif content_type == "track":
-            content = self.db.query(Track).filter(Track.id == content_id).first()
-            if not content or content.user_id != creator_id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You don't own this track"
-                )
-        # Add more content types as needed (video, image, event)
-        
-        return True
-    
-    def _generate_teaser(self, content_type: str, content_id: str) -> str:
-        """Generate teaser text (first 20% of content)"""
-        if content_type == "post":
-            post = self.db.query(Post).filter(Post.id == content_id).first()
-            if post and post.content:
-                teaser_length = len(post.content) // 5  # 20%
-                teaser = post.content[:teaser_length]
-                return teaser + "..." if len(post.content) > teaser_length else teaser
-        
-        return "Exclusive content for members only 🔒"
-    
-    def _get_content(self, content_type: str, content_id: str):
-        """Get content object by type"""
-        if content_type == "post":
-            return self.db.query(Post).filter(Post.id == content_id).first()
-        elif content_type == "track":
-            return self.db.query(Track).filter(Track.id == content_id).first()
-        # Add more content types
-        return None
-    
-    def _serialize_content(self, content_type: str, content) -> Dict:
-        """Serialize content to dict"""
-        if content_type == "post":
-            return {
-                "id": content.id,
-                "type": "post",
-                "content": content.content,
-                "created_at": content.created_at,
-                "user_id": content.user_id
-            }
-        elif content_type == "track":
-            return {
-                "id": content.id,
-                "type": "track",
-                "title": content.title,
-                "file_url": content.file_url,
-                "created_at": content.created_at,
-                "user_id": content.user_id
-            }
-        return {}
-    
-    def _increment_view_count(self, content_type: str, content_id: str):
-        """Increment view count for exclusive content"""
-        exclusive_content = (
-            self.db.query(ExclusiveContent)
-            .filter(
-                ExclusiveContent.content_type == content_type,
-                ExclusiveContent.content_id == content_id
-            )
+        post_id: str,
+        include_full: bool = True
+    ) -> Optional[Dict]:
+        """Get post content for response"""
+        post = (
+            self.db.query(Post)
+            .options(joinedload(Post.user))
+            .filter(Post.id == post_id)
             .first()
         )
         
-        if exclusive_content:
-            exclusive_content.view_count += 1
-            self.db.commit()
+        if not post:
+            return None
+        
+        if not include_full:
+            # Return minimal info with teaser
+            return {
+                "id": post.id,
+                "type": post.type,
+                "user_id": post.user_id,
+                "like_count": post.like_count,
+                "comment_count": post.comment_count
+            }
+        
+        # Return full post content
+        return {
+            "id": post.id,
+            "type": post.type,
+            "user_id": post.user_id,
+            "content": post.content,
+            "media_urls": post.media_urls,
+            "like_count": post.like_count,
+            "comment_count": post.comment_count,
+            "share_count": post.share_count,
+            "view_count": post.view_count,
+            "created_at": post.created_at
+        }
+    
+    def _get_track_content(
+        self,
+        track_id: str,
+        include_full: bool = True,
+        preview_url: Optional[str] = None
+    ) -> Optional[Dict]:
+        """Get track content for response"""
+        track = (
+            self.db.query(Track)
+            .options(joinedload(Track.user))
+            .filter(Track.id == track_id)
+            .first()
+        )
+        
+        if not track:
+            return None
+        
+        if not include_full:
+            # Return minimal info with preview
+            return {
+                "id": track.id,
+                "title": track.title,
+                "artist_name": track.artist_name,
+                "preview_url": preview_url,
+                "cover_art_url": track.cover_art_url,
+                "play_count": track.play_count
+            }
+        
+        # Return full track content
+        return {
+            "id": track.id,
+            "title": track.title,
+            "artist_name": track.artist_name,
+            "album": track.album,
+            "genre": track.genre,
+            "duration": track.duration,
+            "bpm": track.bpm,
+            "audio_url": track.audio_url,
+            "cover_art_url": track.cover_art_url,
+            "description": track.description,
+            "play_count": track.play_count,
+            "like_count": track.like_count,
+            "download_count": track.download_count,
+            "created_at": track.created_at
+        }
+    
+    def get_exclusive_content_stats(
+        self,
+        fan_club_id: str
+    ) -> Dict:
+        """Get statistics on exclusive content"""
+        stats = (
+            self.db.query(
+                func.count(ExclusiveContent.id).label('total_exclusive'),
+                func.sum(ExclusiveContent.view_count).label('total_views'),
+                func.sum(ExclusiveContent.engagement_count).label('total_engagement')
+            )
+            .filter(ExclusiveContent.fan_club_id == fan_club_id)
+            .first()
+        )
+        
+        return {
+            "total_exclusive_content": stats[0] or 0,
+            "total_views": stats[1] or 0,
+            "total_engagement": stats[2] or 0
+        }

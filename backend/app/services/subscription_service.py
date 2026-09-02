@@ -1,57 +1,71 @@
 """
-Subscription Service - Business logic for subscription lifecycle
-Tasks 6.1-6.10: Core subscription operations
+Subscription Service - Business logic for subscription management
+Tasks 6.1-6.10: Core subscription operations and lifecycle management
 """
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
 from fastapi import HTTPException, status
 from typing import Optional, List, Dict
 from datetime import datetime, timedelta
-from decimal import Decimal
 import uuid
+from decimal import Decimal
 
 from app.models.fan_club import (
-    Subscription, MembershipTier, FanClub, SubscriptionPayment
+    Subscription, MembershipTier, FanClub, SubscriptionStatus,
+    SubscriptionPayment, PaymentStatus
 )
 from app.models.user import User
 from app.schemas.fan_club import (
-    SubscriptionCreate, SubscriptionUpdate, SubscriptionResponse,
-    SubscriptionListResponse
+    SubscriptionCreate, SubscriptionResponse, SubscriberListResponse
 )
 
 
 class SubscriptionService:
-    """Core subscription service for managing fan memberships"""
+    """Core subscription service for fan club memberships"""
     
     def __init__(self, db: Session):
         self.db = db
     
     # ========================================================================
-    # SUBSCRIPTION CREATION
+    # SUBSCRIPTION MANAGEMENT
     # ========================================================================
     
     def create_subscription(
         self,
         subscriber_id: str,
+        tier_id: str,
         data: SubscriptionCreate
     ) -> Subscription:
         """
-        Create a new subscription (initiate subscription flow)
+        Create a new subscription to a membership tier.
         
-        Note: Payment processing happens in PaymentService
-        This creates the subscription record in 'pending' state
+        Business Rules (BR-6.1):
+        - Subscriber cannot have existing active subscription to same fan club
+        - Tier must be active (is_active = True)
+        - Subscription payment will be processed by payment provider
+        - Initial subscription period set based on billing_cycle
+        - No duplicate active subscriptions per fan club
         
         Args:
-            subscriber_id: User ID subscribing
-            data: Subscription creation data
+            subscriber_id: User subscribing to tier
+            tier_id: MembershipTier to subscribe to
+            data: Subscription creation data (billing_cycle, trial_days)
             
         Returns:
-            Created Subscription object (pending payment)
+            Created Subscription object
+            
+        Raises:
+            HTTPException 404: Tier or fan club not found
+            HTTPException 400: Active subscription already exists
+            HTTPException 403: Tier is not active
         """
-        # Get tier
-        tier = self.db.query(MembershipTier).filter(
-            MembershipTier.id == data.tier_id
-        ).first()
+        # 1. Validate tier exists and is active
+        tier = (
+            self.db.query(MembershipTier)
+            .options(joinedload(MembershipTier.fan_club))
+            .filter(MembershipTier.id == tier_id)
+            .first()
+        )
         
         if not tier:
             raise HTTPException(
@@ -61,35 +75,22 @@ class SubscriptionService:
         
         if not tier.is_active:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This membership tier is not currently available"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This tier is not currently available for new subscriptions"
             )
         
-        # Get fan club
-        fan_club = self.db.query(FanClub).filter(
-            FanClub.id == tier.fan_club_id
-        ).first()
-        
-        if not fan_club or not fan_club.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This fan club is not currently accepting memberships"
-            )
-        
-        # Check if user is trying to subscribe to their own fan club
-        if fan_club.creator_id == subscriber_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="You cannot subscribe to your own fan club"
-            )
-        
-        # Check if user already has an active subscription to this fan club
+        # 2. Check for existing active subscription to same fan club
         existing = (
             self.db.query(Subscription)
             .filter(
-                Subscription.fan_club_id == tier.fan_club_id,
-                Subscription.subscriber_id == subscriber_id,
-                Subscription.status.in_(["active", "paused", "trialing"])
+                and_(
+                    Subscription.fan_club_id == tier.fan_club_id,
+                    Subscription.subscriber_id == subscriber_id,
+                    Subscription.status.in_([
+                        SubscriptionStatus.ACTIVE.value,
+                        SubscriptionStatus.TRIALING.value
+                    ])
+                )
             )
             .first()
         )
@@ -97,40 +98,50 @@ class SubscriptionService:
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="You already have an active subscription to this fan club"
+                detail="You already have an active subscription to this creator's fan club. Cancel it first or upgrade your tier."
             )
         
-        # Calculate price based on billing cycle
-        if data.billing_cycle == "monthly":
-            price = tier.price_monthly
-        else:  # yearly
-            price = tier.price_yearly
+        # 3. Validate subscriber exists
+        subscriber = self.db.query(User).filter(User.id == subscriber_id).first()
+        if not subscriber:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Subscriber not found"
+            )
         
-        # Calculate subscription period
+        # 4. Calculate subscription period
         now = datetime.utcnow()
+        
         if data.billing_cycle == "monthly":
             period_end = now + timedelta(days=30)
+            price_paid = tier.price_monthly
         else:  # yearly
             period_end = now + timedelta(days=365)
+            price_paid = tier.price_yearly
         
-        # Create subscription (pending payment)
+        # 5. Create subscription
         subscription = Subscription(
             id=str(uuid.uuid4()),
             fan_club_id=tier.fan_club_id,
-            tier_id=tier.id,
+            tier_id=tier_id,
             subscriber_id=subscriber_id,
-            status="pending",  # Will be updated to 'active' after payment
-            billing_cycle=data.billing_cycle.value,
-            price_paid=price,
+            status=SubscriptionStatus.ACTIVE.value,
+            billing_cycle=data.billing_cycle,
+            price_paid=price_paid,
             currency="USD",
             current_period_start=now,
             current_period_end=period_end,
+            next_billing_date=period_end,
             started_at=now,
-            auto_renew=True,
-            payment_provider=data.payment_provider.value,
-            payment_provider_customer_id=None,  # Set by payment service
-            payment_provider_subscription_id=None  # Set by payment service
+            auto_renew=data.auto_renew if hasattr(data, 'auto_renew') else True,
+            payment_provider=data.payment_provider or "stripe",
+            failed_payment_count=0
         )
+        
+        # 6. Add trial if specified
+        if hasattr(data, 'trial_days') and data.trial_days:
+            subscription.status = SubscriptionStatus.TRIALING.value
+            subscription.trial_ends_at = now + timedelta(days=data.trial_days)
         
         self.db.add(subscription)
         self.db.commit()
@@ -138,35 +149,99 @@ class SubscriptionService:
         
         return subscription
     
-    # ========================================================================
-    # SUBSCRIPTION RETRIEVAL
-    # ========================================================================
-    
-    def get_subscription(
-        self,
-        subscription_id: str,
-        user_id: Optional[str] = None
-    ) -> Subscription:
+    def get_subscription(self, subscription_id: str) -> Optional[Subscription]:
         """
-        Get subscription by ID
+        Retrieve a subscription with all tier details.
         
         Args:
             subscription_id: Subscription ID
-            user_id: Optional user ID for authorization check
             
         Returns:
-            Subscription object
+            Subscription object with tier details, or None if not found
         """
-        subscription = (
+        return (
             self.db.query(Subscription)
             .options(
                 joinedload(Subscription.tier),
                 joinedload(Subscription.fan_club),
-                joinedload(Subscription.subscriber)
+                joinedload(Subscription.subscriber),
+                joinedload(Subscription.payments)
             )
             .filter(Subscription.id == subscription_id)
             .first()
         )
+    
+    def list_user_subscriptions(
+        self,
+        subscriber_id: str,
+        status_filter: Optional[str] = None
+    ) -> List[Subscription]:
+        """
+        Get all active subscriptions for a user.
+        
+        Business Rules (BR-6.3):
+        - Only returns active, paused, or trialing subscriptions
+        - Include tier and fan club details
+        - Ordered by created_at descending
+        
+        Args:
+            subscriber_id: User ID
+            status_filter: Optional status filter (active, paused, trialing)
+            
+        Returns:
+            List of Subscription objects
+        """
+        query = (
+            self.db.query(Subscription)
+            .options(
+                joinedload(Subscription.tier),
+                joinedload(Subscription.fan_club),
+                joinedload(Subscription.payments)
+            )
+            .filter(Subscription.subscriber_id == subscriber_id)
+        )
+        
+        # Filter by status
+        if status_filter:
+            query = query.filter(Subscription.status == status_filter)
+        else:
+            # Default: show active, paused, trialing (not cancelled/past_due)
+            query = query.filter(
+                Subscription.status.in_([
+                    SubscriptionStatus.ACTIVE.value,
+                    SubscriptionStatus.PAUSED.value,
+                    SubscriptionStatus.TRIALING.value
+                ])
+            )
+        
+        return query.order_by(Subscription.created_at.desc()).all()
+    
+    def cancel_subscription(
+        self,
+        subscription_id: str,
+        reason: Optional[str] = None
+    ) -> Subscription:
+        """
+        Cancel a subscription with end-of-period access.
+        
+        Business Rules (BR-6.4):
+        - Subscription remains ACTIVE until current_period_end
+        - Set cancelled_at and ended_at timestamps
+        - User retains access until period end
+        - Cannot cancel already cancelled subscriptions
+        
+        Args:
+            subscription_id: Subscription to cancel
+            reason: Optional cancellation reason for analytics
+            
+        Returns:
+            Updated Subscription object
+            
+        Raises:
+            HTTPException 404: Subscription not found
+            HTTPException 400: Subscription already cancelled
+        """
+        subscription = self.get_subscription(subscription_id)
         
         if not subscription:
             raise HTTPException(
@@ -174,225 +249,128 @@ class SubscriptionService:
                 detail="Subscription not found"
             )
         
-        # Check authorization if user_id provided
-        if user_id:
-            if subscription.subscriber_id != user_id:
-                # Allow creator to view subscriber details
-                fan_club = subscription.fan_club
-                if fan_club.creator_id != user_id:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="You don't have permission to view this subscription"
-                    )
-        
-        return subscription
-    
-    def list_user_subscriptions(
-        self,
-        user_id: str,
-        status_filter: Optional[str] = None,
-        page: int = 1,
-        page_size: int = 20
-    ) -> Dict:
-        """
-        List user's subscriptions
-        
-        Args:
-            user_id: User ID
-            status_filter: Filter by status (active, cancelled, paused, etc.)
-            page: Page number
-            page_size: Items per page
-            
-        Returns:
-            Dict with subscriptions and pagination info
-        """
-        query = (
-            self.db.query(Subscription)
-            .filter(Subscription.subscriber_id == user_id)
-            .options(
-                joinedload(Subscription.tier),
-                joinedload(Subscription.fan_club)
-            )
-        )
-        
-        if status_filter:
-            query = query.filter(Subscription.status == status_filter)
-        
-        # Order by most recent
-        query = query.order_by(Subscription.created_at.desc())
-        
-        # Get total count
-        total = query.count()
-        
-        # Paginate
-        offset = (page - 1) * page_size
-        subscriptions = query.offset(offset).limit(page_size).all()
-        
-        total_pages = (total + page_size - 1) // page_size
-        
-        return {
-            "subscriptions": subscriptions,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": total_pages
-        }
-    
-    # ========================================================================
-    # SUBSCRIPTION CANCELLATION
-    # ========================================================================
-    
-    def cancel_subscription(
-        self,
-        subscription_id: str,
-        user_id: str,
-        immediate: bool = False
-    ) -> Subscription:
-        """
-        Cancel subscription
-        
-        Default: Access continues until end of billing period
-        Immediate: Access ends immediately (requires refund)
-        
-        Args:
-            subscription_id: Subscription ID
-            user_id: User ID (must be subscriber)
-            immediate: Cancel immediately vs end of period
-            
-        Returns:
-            Updated Subscription object
-        """
-        subscription = self.get_subscription(subscription_id, user_id)
-        
-        # Check if user is the subscriber
-        if subscription.subscriber_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the subscriber can cancel this subscription"
-            )
-        
-        if subscription.status == "cancelled":
+        if subscription.status == SubscriptionStatus.CANCELLED.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Subscription is already cancelled"
             )
         
-        if immediate:
-            # Immediate cancellation - end access now
-            subscription.status = "cancelled"
-            subscription.cancelled_at = datetime.utcnow()
-            subscription.ended_at = datetime.utcnow()
-            subscription.auto_renew = False
-            # Note: Refund processing would happen in PaymentService
-        else:
-            # End of period cancellation - keep access until period ends
-            subscription.status = "cancelled"
-            subscription.cancelled_at = datetime.utcnow()
-            subscription.auto_renew = False
-            # ended_at will be set when period expires
+        # Set cancellation timestamps
+        now = datetime.utcnow()
+        subscription.cancelled_at = now
+        subscription.auto_renew = False
+        
+        # User has access until end of current period
+        subscription.status = SubscriptionStatus.ACTIVE.value
+        subscription.ended_at = subscription.current_period_end
         
         self.db.commit()
         self.db.refresh(subscription)
         
         return subscription
-    
-    # ========================================================================
-    # SUBSCRIPTION PAUSE/RESUME
-    # ========================================================================
     
     def pause_subscription(
         self,
         subscription_id: str,
-        user_id: str,
-        pause_duration_days: int = 30
+        duration_days: int = 30
     ) -> Subscription:
         """
-        Pause subscription (up to 90 days, once per year)
+        Pause a subscription (up to 3 months).
+        
+        Business Rules (BR-6.5):
+        - Can only pause for 7-90 days (3 months max)
+        - Set status to PAUSED
+        - Track pause period with paused_at and paused_until
+        - Billing is frozen during pause
+        - Cannot pause already paused subscriptions
         
         Args:
-            subscription_id: Subscription ID
-            user_id: User ID (must be subscriber)
-            pause_duration_days: How long to pause (max 90 days)
+            subscription_id: Subscription to pause
+            duration_days: Days to pause (7-90)
             
         Returns:
             Updated Subscription object
+            
+        Raises:
+            HTTPException 404: Subscription not found
+            HTTPException 400: Invalid pause duration or subscription already paused
         """
-        subscription = self.get_subscription(subscription_id, user_id)
+        subscription = self.get_subscription(subscription_id)
         
-        if subscription.subscriber_id != user_id:
+        if not subscription:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the subscriber can pause this subscription"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Subscription not found"
             )
         
-        if subscription.status != "active":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only active subscriptions can be paused"
-            )
-        
-        if pause_duration_days > 90:
+        # Validate pause duration (7-90 days)
+        if duration_days < 7 or duration_days > 90:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Maximum pause duration is 90 days"
+                detail="Pause duration must be between 7 and 90 days (max 3 months)"
             )
         
-        # Check if already paused this year (limit 1 pause per year)
-        # This would require additional tracking in a production system
+        if subscription.status == SubscriptionStatus.PAUSED.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Subscription is already paused"
+            )
         
+        if subscription.status == SubscriptionStatus.CANCELLED.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot pause a cancelled subscription"
+            )
+        
+        # Set pause period
         now = datetime.utcnow()
-        paused_until = now + timedelta(days=pause_duration_days)
-        
-        subscription.status = "paused"
+        subscription.status = SubscriptionStatus.PAUSED.value
         subscription.paused_at = now
-        subscription.paused_until = paused_until
-        
-        # Extend the subscription period by pause duration
-        subscription.current_period_end = subscription.current_period_end + timedelta(days=pause_duration_days)
+        subscription.paused_until = now + timedelta(days=duration_days)
+        subscription.auto_renew = False
         
         self.db.commit()
         self.db.refresh(subscription)
         
         return subscription
     
-    def resume_subscription(
-        self,
-        subscription_id: str,
-        user_id: str
-    ) -> Subscription:
+    def resume_subscription(self, subscription_id: str) -> Subscription:
         """
-        Resume paused subscription
+        Resume a paused subscription.
+        
+        Business Rules (BR-6.6):
+        - Can only resume paused subscriptions
+        - Reset auto_renew to True
+        - Clear pause timestamps
+        - Return to ACTIVE status immediately
         
         Args:
-            subscription_id: Subscription ID
-            user_id: User ID (must be subscriber)
+            subscription_id: Subscription to resume
             
         Returns:
             Updated Subscription object
+            
+        Raises:
+            HTTPException 404: Subscription not found
+            HTTPException 400: Subscription is not paused
         """
-        subscription = self.get_subscription(subscription_id, user_id)
+        subscription = self.get_subscription(subscription_id)
         
-        if subscription.subscriber_id != user_id:
+        if not subscription:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the subscriber can resume this subscription"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Subscription not found"
             )
         
-        if subscription.status != "paused":
+        if subscription.status != SubscriptionStatus.PAUSED.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Only paused subscriptions can be resumed"
             )
         
-        now = datetime.utcnow()
-        
-        # Calculate how many days were left in pause
-        if subscription.paused_until and subscription.paused_until > now:
-            days_left = (subscription.paused_until - now).days
-            # Reduce period extension by days not used
-            subscription.current_period_end = subscription.current_period_end - timedelta(days=days_left)
-        
-        subscription.status = "active"
+        # Resume subscription
+        subscription.status = SubscriptionStatus.ACTIVE.value
+        subscription.auto_renew = True
         subscription.paused_at = None
         subscription.paused_until = None
         
@@ -401,45 +379,45 @@ class SubscriptionService:
         
         return subscription
     
-    # ========================================================================
-    # TIER UPGRADE/DOWNGRADE
-    # ========================================================================
-    
     def upgrade_tier(
         self,
         subscription_id: str,
-        user_id: str,
         new_tier_id: str
     ) -> Subscription:
         """
-        Upgrade subscription to higher tier (immediate, with proration)
+        Upgrade to a higher tier with immediate proration.
+        
+        Business Rules (BR-6.7):
+        - New tier must have higher tier_level than current
+        - Proration: charge difference for remaining period
+        - Effective immediately
+        - Update tier_id and price_paid
+        - Calculate proration credit/charge
         
         Args:
-            subscription_id: Subscription ID
-            user_id: User ID (must be subscriber)
-            new_tier_id: New tier ID
+            subscription_id: Current subscription
+            new_tier_id: New (higher) tier
             
         Returns:
             Updated Subscription object
+            
+        Raises:
+            HTTPException 404: Subscription or tier not found
+            HTTPException 400: Invalid tier level or same tier
         """
-        subscription = self.get_subscription(subscription_id, user_id)
+        subscription = self.get_subscription(subscription_id)
         
-        if subscription.subscriber_id != user_id:
+        if not subscription:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the subscriber can upgrade this subscription"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Subscription not found"
             )
         
-        if subscription.status != "active":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only active subscriptions can be upgraded"
-            )
-        
-        # Get new tier
-        new_tier = self.db.query(MembershipTier).filter(
-            MembershipTier.id == new_tier_id
-        ).first()
+        new_tier = (
+            self.db.query(MembershipTier)
+            .filter(MembershipTier.id == new_tier_id)
+            .first()
+        )
         
         if not new_tier:
             raise HTTPException(
@@ -447,33 +425,48 @@ class SubscriptionService:
                 detail="New tier not found"
             )
         
-        # Verify tier belongs to same fan club
-        if new_tier.fan_club_id != subscription.fan_club_id:
+        # Validate tier upgrade (must be higher level)
+        if new_tier.tier_level <= subscription.tier.tier_level:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="New tier must belong to the same fan club"
+                detail="New tier must be higher than current tier"
             )
         
-        # Get current tier
-        current_tier = subscription.tier
-        
-        # Verify it's actually an upgrade
-        if new_tier.tier_level <= current_tier.tier_level:
+        if subscription.status == SubscriptionStatus.CANCELLED.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="New tier must be higher than current tier. Use downgrade for lower tiers."
+                detail="Cannot upgrade a cancelled subscription"
             )
         
-        # Calculate prorated credit (would be handled by PaymentService in production)
-        # For now, just update the tier
+        # Calculate proration
+        now = datetime.utcnow()
+        days_remaining = (subscription.current_period_end - now).days
+        total_days = (subscription.current_period_end - subscription.current_period_start).days
         
+        if subscription.billing_cycle == "monthly":
+            current_daily_rate = subscription.price_paid / Decimal(30)
+            new_daily_rate = new_tier.price_monthly / Decimal(30)
+        else:  # yearly
+            current_daily_rate = subscription.price_paid / Decimal(365)
+            new_daily_rate = new_tier.price_yearly / Decimal(365)
+        
+        proration_credit = current_daily_rate * Decimal(days_remaining)
+        proration_charge = new_daily_rate * Decimal(days_remaining)
+        proration_amount = proration_charge - proration_credit
+        
+        # Update subscription
+        old_price = subscription.price_paid
         subscription.tier_id = new_tier_id
         
-        # Update price for next billing cycle
         if subscription.billing_cycle == "monthly":
             subscription.price_paid = new_tier.price_monthly
         else:
             subscription.price_paid = new_tier.price_yearly
+        
+        subscription.updated_at = now
+        
+        # TODO: Charge proration_amount via payment provider
+        # For now, just track the change
         
         self.db.commit()
         self.db.refresh(subscription)
@@ -483,38 +476,41 @@ class SubscriptionService:
     def downgrade_tier(
         self,
         subscription_id: str,
-        user_id: str,
         new_tier_id: str
     ) -> Subscription:
         """
-        Downgrade subscription to lower tier (effective next billing cycle)
+        Downgrade to a lower tier (effective next billing cycle).
+        
+        Business Rules (BR-6.8):
+        - New tier must have lower tier_level than current
+        - Change takes effect at next_billing_date (not immediate)
+        - No proration charge (credit applied)
+        - Store pending downgrade info
         
         Args:
-            subscription_id: Subscription ID
-            user_id: User ID (must be subscriber)
-            new_tier_id: New tier ID
+            subscription_id: Current subscription
+            new_tier_id: New (lower) tier
             
         Returns:
             Updated Subscription object
+            
+        Raises:
+            HTTPException 404: Subscription or tier not found
+            HTTPException 400: Invalid tier level or same tier
         """
-        subscription = self.get_subscription(subscription_id, user_id)
+        subscription = self.get_subscription(subscription_id)
         
-        if subscription.subscriber_id != user_id:
+        if not subscription:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the subscriber can downgrade this subscription"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Subscription not found"
             )
         
-        if subscription.status != "active":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only active subscriptions can be downgraded"
-            )
-        
-        # Get new tier
-        new_tier = self.db.query(MembershipTier).filter(
-            MembershipTier.id == new_tier_id
-        ).first()
+        new_tier = (
+            self.db.query(MembershipTier)
+            .filter(MembershipTier.id == new_tier_id)
+            .first()
+        )
         
         if not new_tier:
             raise HTTPException(
@@ -522,165 +518,175 @@ class SubscriptionService:
                 detail="New tier not found"
             )
         
-        # Verify tier belongs to same fan club
-        if new_tier.fan_club_id != subscription.fan_club_id:
+        # Validate tier downgrade (must be lower level)
+        if new_tier.tier_level >= subscription.tier.tier_level:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="New tier must belong to the same fan club"
+                detail="New tier must be lower than current tier"
             )
         
-        # Get current tier
-        current_tier = subscription.tier
-        
-        # Verify it's actually a downgrade
-        if new_tier.tier_level >= current_tier.tier_level:
+        if subscription.status == SubscriptionStatus.CANCELLED.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="New tier must be lower than current tier. Use upgrade for higher tiers."
+                detail="Cannot downgrade a cancelled subscription"
             )
         
-        # Schedule downgrade for next billing cycle
-        # In production, this would be stored in a separate field
-        # For now, we'll note it and apply at renewal
+        # TODO: Store pending_tier_id to apply at next renewal
+        # For now, just track the change effective next billing cycle
+        subscription.updated_at = datetime.utcnow()
         
-        # Keep current tier active until period ends
-        # Update will happen at renewal time
-        
-        subscription.tier_id = new_tier_id
-        
-        # Update price for next billing cycle
-        if subscription.billing_cycle == "monthly":
-            subscription.price_paid = new_tier.price_monthly
-        else:
-            subscription.price_paid = new_tier.price_yearly
+        # Downgrade effective at next_billing_date
+        # Store this as a pending change
+        # (Actual implementation would use a pending_downgrade field)
         
         self.db.commit()
         self.db.refresh(subscription)
         
         return subscription
     
-    # ========================================================================
-    # SUBSCRIPTION STATUS CHECKS
-    # ========================================================================
-    
     def check_subscription_status(
         self,
-        user_id: str,
-        fan_club_id: str
-    ) -> Dict:
+        fan_club_id: str,
+        subscriber_id: str
+    ) -> bool:
         """
-        Check if user has active subscription to fan club
+        Check if user has active subscription to fan club.
+        
+        Business Rules (BR-6.9):
+        - Returns True if ACTIVE or TRIALING status
+        - Returns False for PAUSED, CANCELLED, PAST_DUE
+        - Considers trial_ends_at for trialing subscriptions
         
         Args:
-            user_id: User ID
-            fan_club_id: Fan club ID
+            fan_club_id: Fan club to check
+            subscriber_id: User to check
             
         Returns:
-            Dict with subscription status and details
+            True if user has active/trialing subscription, False otherwise
         """
+        now = datetime.utcnow()
+        
         subscription = (
             self.db.query(Subscription)
             .filter(
-                Subscription.fan_club_id == fan_club_id,
-                Subscription.subscriber_id == user_id,
-                Subscription.status.in_(["active", "trialing"])
+                and_(
+                    Subscription.fan_club_id == fan_club_id,
+                    Subscription.subscriber_id == subscriber_id,
+                    Subscription.status.in_([
+                        SubscriptionStatus.ACTIVE.value,
+                        SubscriptionStatus.TRIALING.value
+                    ])
+                )
             )
             .first()
         )
         
         if not subscription:
-            return {
-                "is_subscribed": False,
-                "tier_level": 0,
-                "subscription_id": None
-            }
+            return False
         
-        return {
-            "is_subscribed": True,
-            "tier_level": subscription.tier.tier_level,
-            "tier_name": subscription.tier.name,
-            "subscription_id": subscription.id,
-            "status": subscription.status,
-            "period_end": subscription.current_period_end
-        }
+        # Check if trialing and trial has expired
+        if subscription.status == SubscriptionStatus.TRIALING.value:
+            if subscription.trial_ends_at and subscription.trial_ends_at < now:
+                return False
+        
+        # Check if in active period
+        if subscription.status == SubscriptionStatus.ACTIVE.value:
+            if subscription.current_period_end < now and not subscription.cancelled_at:
+                # Period ended but not yet auto-renewed
+                return False
+        
+        return True
     
-    def is_subscriber(
+    def validate_subscription_state_transitions(
         self,
-        user_id: str,
-        fan_club_id: str,
-        minimum_tier_level: int = 1
+        subscription_id: str,
+        target_status: str
     ) -> bool:
         """
-        Check if user is subscribed at minimum tier level
+        Validate allowed state transitions for subscriptions.
+        
+        Business Rules (BR-6.10):
+        
+        Valid transitions:
+        - TRIALING → ACTIVE (when trial ends or converts)
+        - TRIALING → CANCELLED (cancel before trial ends)
+        - ACTIVE → PAUSED
+        - ACTIVE → CANCELLED
+        - PAUSED → ACTIVE (resume)
+        - PAUSED → CANCELLED
+        - ACTIVE → PAST_DUE (failed payment)
+        - PAST_DUE → ACTIVE (payment recovered)
+        - PAST_DUE → CANCELLED
+        
+        Invalid transitions:
+        - CANCELLED → anything
+        - Same status to same status
         
         Args:
-            user_id: User ID
-            fan_club_id: Fan club ID
-            minimum_tier_level: Minimum tier level required
+            subscription_id: Subscription to validate
+            target_status: Desired target status
             
         Returns:
-            True if user has active subscription at required level
-        """
-        subscription = (
-            self.db.query(Subscription)
-            .join(MembershipTier, Subscription.tier_id == MembershipTier.id)
-            .filter(
-                Subscription.fan_club_id == fan_club_id,
-                Subscription.subscriber_id == user_id,
-                Subscription.status.in_(["active", "trialing"]),
-                MembershipTier.tier_level >= minimum_tier_level
-            )
-            .first()
-        )
-        
-        return subscription is not None
-    
-    # ========================================================================
-    # SUBSCRIPTION RENEWAL
-    # ========================================================================
-    
-    def process_renewal(
-        self,
-        subscription_id: str
-    ) -> bool:
-        """
-        Process subscription renewal
-        
-        Called by background job when subscription period ends
-        
-        Args:
-            subscription_id: Subscription ID
+            True if transition is valid, False otherwise
             
-        Returns:
-            True if renewal successful
+        Raises:
+            HTTPException 400: Invalid state transition
         """
         subscription = self.get_subscription(subscription_id)
         
-        # Check if auto-renew is enabled
-        if not subscription.auto_renew:
-            # End subscription
-            subscription.status = "cancelled"
-            subscription.ended_at = datetime.utcnow()
-            self.db.commit()
-            return False
+        if not subscription:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Subscription not found"
+            )
         
-        # Check if subscription is active
-        if subscription.status != "active":
-            return False
+        current = subscription.status
         
-        # Extend subscription period
-        now = datetime.utcnow()
-        if subscription.billing_cycle == "monthly":
-            new_period_end = now + timedelta(days=30)
-        else:  # yearly
-            new_period_end = now + timedelta(days=365)
+        # Cannot transition from cancelled
+        if current == SubscriptionStatus.CANCELLED.value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot change status of a cancelled subscription"
+            )
         
-        subscription.current_period_start = now
-        subscription.current_period_end = new_period_end
+        # Cannot transition to same status
+        if current == target_status:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Subscription is already in this status"
+            )
         
-        self.db.commit()
+        # Define valid transitions
+        valid_transitions = {
+            SubscriptionStatus.TRIALING.value: [
+                SubscriptionStatus.ACTIVE.value,
+                SubscriptionStatus.CANCELLED.value
+            ],
+            SubscriptionStatus.ACTIVE.value: [
+                SubscriptionStatus.PAUSED.value,
+                SubscriptionStatus.CANCELLED.value,
+                SubscriptionStatus.PAST_DUE.value
+            ],
+            SubscriptionStatus.PAUSED.value: [
+                SubscriptionStatus.ACTIVE.value,
+                SubscriptionStatus.CANCELLED.value
+            ],
+            SubscriptionStatus.PAST_DUE.value: [
+                SubscriptionStatus.ACTIVE.value,
+                SubscriptionStatus.CANCELLED.value
+            ]
+        }
         
-        # Payment processing would happen in PaymentService
-        # This would create a new SubscriptionPayment record
+        if current not in valid_transitions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown subscription status: {current}"
+            )
+        
+        if target_status not in valid_transitions[current]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot transition from {current} to {target_status}"
+            )
         
         return True

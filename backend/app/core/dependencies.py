@@ -75,6 +75,11 @@ async def get_current_user(
             detail="User not found"
         )
     
+    # Set default tier if None (for backward compatibility)
+    if not hasattr(user, 'tier') or user.tier is None:
+        from app.models.user import UserTier
+        user.tier = UserTier.FREE
+    
     # Check if user is active
     if not user.is_active:
         raise HTTPException(
@@ -219,3 +224,43 @@ async def get_optional_user(
         return user
     except Exception:
         return None
+
+
+
+# ============================================================================
+# AI SERVICE DEPENDENCIES
+# ============================================================================
+
+import redis as redis_module
+from app.ai.ai_service_new import AIService
+from app.core.rate_limiting import AIRateLimiter
+
+
+def get_redis():
+    """Get Redis client"""
+    from app.core.config import settings
+    
+    redis_client = redis_module.from_url(settings.REDIS_URL, decode_responses=True)
+    try:
+        yield redis_client
+    finally:
+        redis_client.close()
+
+
+async def get_ai_service(
+    redis: redis_module.Redis = Depends(get_redis),
+    db: Session = Depends(get_db)
+) -> AIService:
+    """Get AI service instance"""
+    service = AIService(redis=redis, db=db)
+    try:
+        yield service
+    finally:
+        await service.close()
+
+
+async def get_rate_limiter(
+    redis: redis_module.Redis = Depends(get_redis)
+) -> AIRateLimiter:
+    """Get AI rate limiter instance"""
+    return AIRateLimiter(redis_client=redis)

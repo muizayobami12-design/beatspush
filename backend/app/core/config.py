@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     
     # Server
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    PORT: int = 9000
     
     # Database
     DATABASE_URL: str
@@ -56,12 +56,33 @@ class Settings(BaseSettings):
     S3_REGION: Optional[str] = None
     S3_ENDPOINT_URL: Optional[str] = None
     
-    # OpenAI
-    OPENAI_API_KEY: str
+    # Cloudflare R2 Storage
+    R2_ACCOUNT_ID: Optional[str] = None
+    R2_ACCESS_KEY_ID: Optional[str] = None
+    R2_SECRET_ACCESS_KEY: Optional[str] = None
+    R2_BUCKET_AUDIO: Optional[str] = None
+    R2_BUCKET_IMAGES: Optional[str] = None
+    R2_BUCKET_BACKUPS: Optional[str] = None
+    R2_PUBLIC_URL: Optional[str] = None
+    
+    # File Upload Limits
+    MAX_AUDIO_FILE_SIZE_MB: int = 100
+    MAX_IMAGE_FILE_SIZE_MB: int = 10
+    MAX_VIDEO_FILE_SIZE_MB: int = 500
+    
+    # OpenAI (Optional - fallback only)
+    OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4"
     
     # Anthropic
     ANTHROPIC_API_KEY: Optional[str] = None
+    
+    # AI Configuration (Hugging Face - Free)
+    HUGGINGFACE_API_URL: str = "https://api-inference.huggingface.co"
+    AI_CACHE_TTL_DAYS: int = 7
+    AI_FREE_TIER_DAILY_LIMIT: int = 20
+    AI_RESPONSE_TIMEOUT_SECONDS: int = 10
+    AI_MAX_RETRIES: int = 3
     
     # Stripe
     STRIPE_SECRET_KEY: Optional[str] = "test_mode"
@@ -108,6 +129,14 @@ class Settings(BaseSettings):
     
     # Sentry
     SENTRY_DSN: Optional[str] = None
+    
+    # Security - Cloudflare Turnstile
+    TURNSTILE_SECRET_KEY: Optional[str] = None
+    TURNSTILE_SITE_KEY: Optional[str] = None
+    
+    # Security - Termii SMS (Nigerian SMS provider)
+    TERMII_API_KEY: Optional[str] = None
+    TERMII_SENDER_ID: str = "BeatPush"
     
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True

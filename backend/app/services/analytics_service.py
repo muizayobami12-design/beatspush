@@ -1,415 +1,885 @@
 """
-Analytics Service for Fan Club System.
+Fan club analytics service.
 
-Provides subscription analytics:
+Provides metrics:
 - MRR (Monthly Recurring Revenue)
-- Churn rate
+- ARPU (Average Revenue Per User)
+- Churn rate & analysis
 - Retention cohorts
-- LTV (Lifetime Value)
 - Revenue forecasting
 - Engagement metrics
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+from typing import Dict, List, Tuple, Optional
 from decimal import Decimal
-from typing import Dict, List, Optional
+from collections import defaultdict
+import statistics
+
+from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, extract
 
 from app.models.fan_club import (
-    FanClub, MembershipTier, Subscription,
-    SubscriptionPayment, ExclusiveContent
+    Subscription,
+    SubscriptionPayment,
+    FanClub,
+    MembershipTier,
+    ExclusiveContent
 )
 from app.models.user import User
+from app.models.social import Post
 
 logger = logging.getLogger(__name__)
 
 
 class AnalyticsService:
-    """Service for generating fan club analytics and insights."""
+    """
+    Comprehensive analytics for fan club system.
+    
+    Metrics:
+    - Revenue: MRR, ARPU, LTV
+    - Churn: Monthly rate, reasons, trends
+    - Retention: Cohorts, repeat rate
+    - Engagement: Activity, content consumption
+    - Forecasting: Trends, predictions
+    """
     
     def __init__(self, db: Session):
+        """Initialize analytics service with database session."""
         self.db = db
     
-    def calculate_mrr(self, fan_club_id: str) -> Dict:
-        """
-        Calculate Monthly Recurring Revenue (MRR) for a fan club.
-        
-        Args:
-            fan_club_id: Fan club ID
-        
-        Returns:
-            Dict with MRR breakdown by tier and totals
-        """
-        # Get all active subscriptions
-        active_subs = self.db.query(Subscription).filter(
-            and_(
-                Subscription.fan_club_id == fan_club_id,
-                Subscription.status == "active"
-            )
-        ).all()
-        
-        mrr_by_tier = {}
-        total_mrr = Decimal("0")
-        
-        for sub in active_subs:
-            # Convert yearly to monthly for MRR calculation
-            if sub.billing_cycle == "monthly":
-                monthly_value = sub.price_paid
-            else:  # yearly
-                monthly_value = sub.price_paid / 12
-            
-            tier_name = sub.tier.name
-            if tier_name not in mrr_by_tier:
-                mrr_by_tier[tier_name] = {
-                    "mrr": Decimal("0"),
-                    "subscriber_count": 0
-                }
-            
-            mrr_by_tier[tier_name]["mrr"] += monthly_value
-            mrr_by_tier[tier_name]["subscriber_count"] += 1
-            total_mrr += monthly_value
-        
-        # Calculate creator payout (90% of MRR)
-        creator_mrr = total_mrr * Decimal("0.90")
-        platform_fee = total_mrr * Decimal("0.10")
-        
-        return {
-            "total_mrr": float(total_mrr),
-            "creator_mrr": float(creator_mrr),
-            "platform_fee": float(platform_fee),
-            "by_tier": {
-                tier: {
-                    "mrr": float(data["mrr"]),
-                    "subscriber_count": data["subscriber_count"]
-                }
-                for tier, data in mrr_by_tier.items()
-            },
-            "total_active_subscribers": len(active_subs),
-            "currency": "USD"
-        }
+    # ==================== REVENUE METRICS ====================
     
-    def calculate_churn_rate(
-        self, 
-        fan_club_id: str, 
-        period_months: int = 1
+    def get_mrr(
+        self,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        fan_club_id: Optional[int] = None,
+        creator_id: Optional[int] = None
     ) -> Dict:
         """
-        Calculate churn rate for a given period.
+        Calculate Monthly Recurring Revenue (MRR).
         
-        Churn rate = (Canceled subscriptions) / (Total subscriptions at start) * 100
-        
-        Args:
-            fan_club_id: Fan club ID
-            period_months: Number of months to analyze (default: 1)
-        
-        Returns:
-            Dict with churn metrics
-        """
-        period_start = datetime.utcnow() - timedelta(days=30 * period_months)
-        period_end = datetime.utcnow()
-        
-        # Subscriptions at start of period
-        start_count = self.db.query(func.count(Subscription.id)).filter(
-            and_(
-                Subscription.fan_club_id == fan_club_id,
-                Subscription.started_at < period_start,
-                Subscription.status.in_(["active", "cancelled", "past_due"])
-            )
-        ).scalar() or 0
-        
-        # Subscriptions canceled during period
-        canceled_count = self.db.query(func.count(Subscription.id)).filter(
-            and_(
-                Subscription.fan_club_id == fan_club_id,
-                Subscription.cancelled_at.between(period_start, period_end)
-            )
-        ).scalar() or 0
-        
-        # New subscriptions during period
-        new_count = self.db.query(func.count(Subscription.id)).filter(
-            and_(
-                Subscription.fan_club_id == fan_club_id,
-                Subscription.started_at.between(period_start, period_end)
-            )
-        ).scalar() or 0
-        
-        # Current active subscriptions
-        current_active = self.db.query(func.count(Subscription.id)).filter(
-            and_(
-                Subscription.fan_club_id == fan_club_id,
-                Subscription.status == "active"
-            )
-        ).scalar() or 0
-        
-        # Calculate churn rate
-        churn_rate = (canceled_count / start_count * 100) if start_count > 0 else 0
-        
-        # Calculate net growth
-        net_growth = new_count - canceled_count
-        growth_rate = (net_growth / start_count * 100) if start_count > 0 else 0
-        
-        return {
-            "period_months": period_months,
-            "period_start": period_start.isoformat(),
-            "period_end": period_end.isoformat(),
-            "subscribers_at_start": start_count,
-            "new_subscribers": new_count,
-            "canceled_subscribers": canceled_count,
-            "current_active_subscribers": current_active,
-            "churn_rate_percent": round(churn_rate, 2),
-            "net_growth": net_growth,
-            "growth_rate_percent": round(growth_rate, 2)
-        }
-    
-    def calculate_retention_cohorts(self, fan_club_id: str) -> List[Dict]:
-        """
-        Calculate retention cohorts by signup month.
-        
-        Shows how many subscribers from each month are still active.
+        MRR = Sum of all active subscription amounts in a month
         
         Args:
-            fan_club_id: Fan club ID
+            start_date: Month start (default: current month)
+            end_date: Month end
+            fan_club_id: Filter by specific fan club
+            creator_id: Filter by creator
         
         Returns:
-            List of cohort data
+            {
+                'mrr': Decimal,
+                'active_subscriptions': int,
+                'month': str,
+                'currency': str,
+                'breakdown': {
+                    'tier_name': amount,
+                    ...
+                }
+            }
         """
-        # Get all subscriptions grouped by signup month
-        cohorts = self.db.query(
-            extract('year', Subscription.started_at).label('year'),
-            extract('month', Subscription.started_at).label('month'),
-            func.count(Subscription.id).label('initial_count'),
-            func.sum(
-                func.case(
-                    (Subscription.status == 'active', 1),
-                    else_=0
-                )
-            ).label('still_active')
-        ).filter(
-            Subscription.fan_club_id == fan_club_id
-        ).group_by('year', 'month').order_by('year', 'month').all()
+        if start_date is None:
+            now = datetime.utcnow().date()
+            start_date = date(now.year, now.month, 1)
         
-        cohort_data = []
-        for cohort in cohorts:
-            retention_rate = (cohort.still_active / cohort.initial_count * 100) if cohort.initial_count > 0 else 0
-            cohort_data.append({
-                "cohort_month": f"{int(cohort.year)}-{int(cohort.month):02d}",
-                "initial_subscribers": cohort.initial_count,
-                "still_active": cohort.still_active,
-                "retention_rate_percent": round(retention_rate, 2),
-                "months_since_start": (
-                    datetime.utcnow().year - int(cohort.year)
-                ) * 12 + (datetime.utcnow().month - int(cohort.month))
-            })
+        if end_date is None:
+            if start_date.month == 12:
+                end_date = date(start_date.year + 1, 1, 1) - timedelta(days=1)
+            else:
+                end_date = date(start_date.year, start_date.month + 1, 1) - timedelta(days=1)
         
-        return cohort_data
-    
-    def calculate_ltv(self, fan_club_id: str) -> Dict:
-        """
-        Calculate average Lifetime Value (LTV) per subscriber.
-        
-        LTV = Average revenue per subscriber * Average subscription lifetime
-        
-        Args:
-            fan_club_id: Fan club ID
-        
-        Returns:
-            Dict with LTV metrics
-        """
-        # Get all completed payments
-        total_revenue = self.db.query(
-            func.sum(SubscriptionPayment.amount)
-        ).join(Subscription).filter(
-            and_(
-                Subscription.fan_club_id == fan_club_id,
-                SubscriptionPayment.status == "completed"
-            )
-        ).scalar() or Decimal("0")
-        
-        # Get all unique subscribers (past and present)
-        total_subscribers = self.db.query(
-            func.count(func.distinct(Subscription.subscriber_id))
-        ).filter(
-            Subscription.fan_club_id == fan_club_id
-        ).scalar() or 0
-        
-        # Calculate average revenue per subscriber
-        avg_revenue_per_subscriber = (
-            float(total_revenue / total_subscribers)
-            if total_subscribers > 0 else 0
+        query = self.db.query(Subscription).filter(
+            Subscription.status == "active",
+            Subscription.next_billing_date >= start_date,
+            Subscription.next_billing_date <= end_date
         )
         
-        # Calculate average subscription length (in months)
-        avg_subscription_months = self.db.query(
-            func.avg(
-                func.extract('epoch', 
-                    func.coalesce(Subscription.cancelled_at, func.now()) - 
-                    Subscription.started_at
-                ) / 2592000  # Convert seconds to months (30 days)
-            )
-        ).filter(
-            Subscription.fan_club_id == fan_club_id
-        ).scalar() or 0
+        if fan_club_id:
+            query = query.filter(Subscription.fan_club_id == fan_club_id)
         
-        # LTV = avg revenue per sub * avg subscription length factor
-        ltv = avg_revenue_per_subscriber
+        if creator_id:
+            query = query.join(FanClub).filter(FanClub.creator_id == creator_id)
         
-        # Get current MRR for projections
-        mrr_data = self.calculate_mrr(fan_club_id)
-        avg_monthly_revenue = (
-            mrr_data["total_mrr"] / mrr_data["total_active_subscribers"]
-            if mrr_data["total_active_subscribers"] > 0 else 0
-        )
+        subscriptions = query.all()
         
-        # Projected LTV (assuming average 12 month retention)
-        projected_ltv = avg_monthly_revenue * 12
+        # Calculate MRR by summing all active subscription amounts
+        total_mrr = sum(sub.tier.price for sub in subscriptions)
+        
+        # Breakdown by tier
+        tier_breakdown = defaultdict(Decimal)
+        for sub in subscriptions:
+            tier_breakdown[sub.tier.name] += sub.tier.price
         
         return {
-            "total_revenue": float(total_revenue),
-            "total_subscribers": total_subscribers,
-            "avg_revenue_per_subscriber": round(avg_revenue_per_subscriber, 2),
-            "avg_subscription_months": round(avg_subscription_months, 2),
-            "historical_ltv": round(ltv, 2),
-            "projected_ltv_12_months": round(projected_ltv, 2),
-            "currency": "USD"
+            'mrr': total_mrr,
+            'active_subscriptions': len(subscriptions),
+            'month': start_date.strftime('%Y-%m'),
+            'currency': 'USD',  # Default, should be configurable
+            'breakdown': dict(tier_breakdown)
         }
     
-    def forecast_revenue(
-        self, 
-        fan_club_id: str, 
-        months: int = 3
+    def get_arpu(
+        self,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        fan_club_id: Optional[int] = None
+    ) -> Dict:
+        """
+        Calculate Average Revenue Per User (ARPU).
+        
+        ARPU = Total Revenue / Active Subscribers
+        
+        Args:
+            start_date: Period start
+            end_date: Period end
+            fan_club_id: Filter by fan club
+        
+        Returns:
+            {
+                'arpu': Decimal,
+                'total_revenue': Decimal,
+                'active_users': int,
+                'period': str
+            }
+        """
+        if start_date is None:
+            start_date = datetime.utcnow().date() - timedelta(days=30)
+        
+        if end_date is None:
+            end_date = datetime.utcnow().date()
+        
+        query = self.db.query(Subscription).filter(
+            Subscription.status == "active",
+            Subscription.started_at >= datetime.combine(start_date, datetime.min.time()),
+            Subscription.started_at <= datetime.combine(end_date, datetime.max.time())
+        )
+        
+        if fan_club_id:
+            query = query.filter(Subscription.fan_club_id == fan_club_id)
+        
+        subscriptions = query.all()
+        
+        if not subscriptions:
+            return {
+                'arpu': Decimal(0),
+                'total_revenue': Decimal(0),
+                'active_users': 0,
+                'period': f"{start_date} to {end_date}"
+            }
+        
+        total_revenue = sum(sub.tier.price for sub in subscriptions)
+        unique_users = len(set(sub.subscriber_id for sub in subscriptions))
+        arpu = total_revenue / unique_users if unique_users > 0 else Decimal(0)
+        
+        return {
+            'arpu': arpu,
+            'total_revenue': total_revenue,
+            'active_users': unique_users,
+            'period': f"{start_date} to {end_date}"
+        }
+    
+    def get_ltv(
+        self,
+        fan_club_id: Optional[int] = None,
+        creator_id: Optional[int] = None
+    ) -> Dict:
+        """
+        Calculate Lifetime Value (LTV) per subscriber.
+        
+        LTV = ARPU × Average Customer Lifespan (in months)
+        
+        Args:
+            fan_club_id: Filter by fan club
+            creator_id: Filter by creator
+        
+        Returns:
+            {
+                'ltv': Decimal,
+                'avg_arpu': Decimal,
+                'avg_lifetime_months': float,
+                'sample_size': int
+            }
+        """
+        query = self.db.query(Subscription).filter(
+            Subscription.status.in_(["active", "cancelled"])
+        )
+        
+        if fan_club_id:
+            query = query.filter(Subscription.fan_club_id == fan_club_id)
+        
+        if creator_id:
+            query = query.join(FanClub).filter(FanClub.creator_id == creator_id)
+        
+        subscriptions = query.all()
+        
+        if not subscriptions:
+            return {
+                'ltv': Decimal(0),
+                'avg_arpu': Decimal(0),
+                'avg_lifetime_months': 0,
+                'sample_size': 0
+            }
+        
+        # Calculate average revenue per subscription
+        avg_arpu = sum(sub.tier.price for sub in subscriptions) / len(subscriptions)
+        
+        # Calculate average subscription length in months
+        lifetimes = []
+        for sub in subscriptions:
+            if sub.cancelled_at:
+                lifetime = (sub.cancelled_at - sub.started_at).days / 30
+            else:
+                lifetime = (datetime.utcnow() - sub.started_at).days / 30
+            lifetimes.append(lifetime)
+        
+        avg_lifetime = statistics.mean(lifetimes) if lifetimes else 0
+        ltv = avg_arpu * avg_lifetime
+        
+        return {
+            'ltv': ltv,
+            'avg_arpu': avg_arpu,
+            'avg_lifetime_months': avg_lifetime,
+            'sample_size': len(subscriptions)
+        }
+    
+    def get_revenue_trend(
+        self,
+        months: int = 12,
+        fan_club_id: Optional[int] = None,
+        creator_id: Optional[int] = None
     ) -> List[Dict]:
         """
-        Forecast revenue for the next N months.
-        
-        Uses current MRR + growth trend to project future revenue.
+        Get monthly revenue trend for N months.
         
         Args:
-            fan_club_id: Fan club ID
-            months: Number of months to forecast
+            months: Number of months to retrieve
+            fan_club_id: Filter by fan club
+            creator_id: Filter by creator
         
         Returns:
-            List of monthly revenue forecasts
+            [
+                {
+                    'month': '2026-01',
+                    'mrr': Decimal,
+                    'subscriptions': int,
+                    'new_subs': int,
+                    'cancelled_subs': int
+                },
+                ...
+            ]
         """
-        # Get current MRR
-        current_mrr_data = self.calculate_mrr(fan_club_id)
-        current_mrr = Decimal(str(current_mrr_data["total_mrr"]))
+        trend = []
+        now = datetime.utcnow().date()
         
-        # Calculate growth rate from last 3 months
-        three_months_ago = datetime.utcnow() - timedelta(days=90)
-        
-        new_subs_last_3m = self.db.query(func.count(Subscription.id)).filter(
-            and_(
-                Subscription.fan_club_id == fan_club_id,
-                Subscription.started_at >= three_months_ago
+        for i in range(months - 1, -1, -1):
+            # Calculate month boundaries
+            current_month = now - timedelta(days=30 * i)
+            month_start = date(current_month.year, current_month.month, 1)
+            
+            if current_month.month == 12:
+                month_end = date(current_month.year + 1, 1, 1) - timedelta(days=1)
+            else:
+                month_end = date(current_month.year, current_month.month + 1, 1) - timedelta(days=1)
+            
+            # Get MRR
+            mrr_data = self.get_mrr(month_start, month_end, fan_club_id, creator_id)
+            
+            # Get new subscriptions in month
+            new_subs = self.db.query(func.count(Subscription.id)).filter(
+                Subscription.started_at >= datetime.combine(month_start, datetime.min.time()),
+                Subscription.started_at <= datetime.combine(month_end, datetime.max.time()),
+                Subscription.status.in_(["active", "cancelled"])
             )
-        ).scalar() or 0
-        
-        canceled_subs_last_3m = self.db.query(func.count(Subscription.id)).filter(
-            and_(
-                Subscription.fan_club_id == fan_club_id,
-                Subscription.cancelled_at >= three_months_ago
+            
+            if fan_club_id:
+                new_subs = new_subs.filter(Subscription.fan_club_id == fan_club_id)
+            
+            if creator_id:
+                new_subs = new_subs.join(FanClub).filter(FanClub.creator_id == creator_id)
+            
+            new_subs_count = new_subs.scalar()
+            
+            # Get cancelled subscriptions in month
+            cancelled_subs = self.db.query(func.count(Subscription.id)).filter(
+                Subscription.cancelled_at >= datetime.combine(month_start, datetime.min.time()),
+                Subscription.cancelled_at <= datetime.combine(month_end, datetime.max.time())
             )
-        ).scalar() or 0
-        
-        total_subs = current_mrr_data["total_active_subscribers"]
-        
-        # Calculate monthly growth rate
-        net_growth = new_subs_last_3m - canceled_subs_last_3m
-        monthly_growth_rate = (net_growth / 3 / total_subs) if total_subs > 0 else 0.05  # Default 5%
-        
-        # Generate forecast
-        forecasts = []
-        projected_mrr = current_mrr
-        
-        for month_offset in range(1, months + 1):
-            forecast_date = datetime.utcnow() + timedelta(days=30 * month_offset)
             
-            # Apply growth rate
-            projected_mrr = projected_mrr * (1 + Decimal(str(monthly_growth_rate)))
+            if fan_club_id:
+                cancelled_subs = cancelled_subs.filter(Subscription.fan_club_id == fan_club_id)
             
-            # Creator payout (90%)
-            creator_revenue = projected_mrr * Decimal("0.90")
+            if creator_id:
+                cancelled_subs = cancelled_subs.join(FanClub).filter(FanClub.creator_id == creator_id)
             
-            forecasts.append({
-                "month": forecast_date.strftime("%Y-%m"),
-                "projected_mrr": round(float(projected_mrr), 2),
-                "creator_revenue": round(float(creator_revenue), 2),
-                "growth_rate_applied": round(monthly_growth_rate * 100, 2),
-                "confidence": "medium" if month_offset <= 3 else "low"
+            cancelled_subs_count = cancelled_subs.scalar()
+            
+            trend.append({
+                'month': month_start.strftime('%Y-%m'),
+                'mrr': mrr_data['mrr'],
+                'subscriptions': mrr_data['active_subscriptions'],
+                'new_subs': new_subs_count or 0,
+                'cancelled_subs': cancelled_subs_count or 0
             })
         
-        return forecasts
+        return trend
     
-    def get_engagement_metrics(self, fan_club_id: str) -> Dict:
+    # ==================== CHURN METRICS ====================
+    
+    def get_churn_rate(
+        self,
+        month: Optional[date] = None,
+        fan_club_id: Optional[int] = None,
+        creator_id: Optional[int] = None
+    ) -> Dict:
         """
-        Calculate engagement metrics for exclusive content.
+        Calculate monthly churn rate.
+        
+        Churn Rate = Cancelled Subscriptions / Beginning Subscribers × 100
         
         Args:
-            fan_club_id: Fan club ID
+            month: Month to calculate (default: last month)
+            fan_club_id: Filter by fan club
+            creator_id: Filter by creator
         
         Returns:
-            Dict with engagement data
+            {
+                'churn_rate': float (percentage),
+                'churned_subscribers': int,
+                'beginning_subscribers': int,
+                'ending_subscribers': int,
+                'month': str
+            }
         """
-        # Count exclusive content items
-        exclusive_content_count = self.db.query(
-            func.count(ExclusiveContent.id)
-        ).filter(
-            ExclusiveContent.fan_club_id == fan_club_id
-        ).scalar() or 0
+        if month is None:
+            month = datetime.utcnow().date()
+            if month.day > 1:
+                month = date(month.year, month.month - 1, 1)
         
-        # Get total views
-        total_views = self.db.query(
-            func.sum(ExclusiveContent.view_count)
-        ).filter(
-            ExclusiveContent.fan_club_id == fan_club_id
-        ).scalar() or 0
+        month_start = date(month.year, month.month, 1)
+        if month.month == 12:
+            month_end = date(month.year + 1, 1, 1) - timedelta(days=1)
+            next_month_start = date(month.year + 1, 1, 1)
+        else:
+            month_end = date(month.year, month.month + 1, 1) - timedelta(days=1)
+            next_month_start = date(month.year, month.month + 1, 1)
         
-        # Get active subscribers
-        active_subs = self.db.query(func.count(Subscription.id)).filter(
-            and_(
-                Subscription.fan_club_id == fan_club_id,
-                Subscription.status == "active"
-            )
-        ).scalar() or 0
-        
-        # Calculate engagement rate
-        avg_views_per_content = (
-            total_views / exclusive_content_count
-            if exclusive_content_count > 0 else 0
+        # Get beginning subscribers (active at start of month)
+        beginning_query = self.db.query(func.count(Subscription.id)).filter(
+            Subscription.started_at <= datetime.combine(month_start, datetime.min.time()),
+            or_(
+                Subscription.cancelled_at >= datetime.combine(month_start, datetime.max.time()),
+                Subscription.cancelled_at == None
+            ),
+            Subscription.status != "cancelled"
         )
         
-        engagement_rate = (
-            (avg_views_per_content / active_subs * 100)
-            if active_subs > 0 else 0
+        if fan_club_id:
+            beginning_query = beginning_query.filter(Subscription.fan_club_id == fan_club_id)
+        if creator_id:
+            beginning_query = beginning_query.join(FanClub).filter(FanClub.creator_id == creator_id)
+        
+        beginning_subs = beginning_query.scalar() or 0
+        
+        # Get churned subscriptions (cancelled in month)
+        churned_query = self.db.query(func.count(Subscription.id)).filter(
+            Subscription.cancelled_at >= datetime.combine(month_start, datetime.min.time()),
+            Subscription.cancelled_at <= datetime.combine(month_end, datetime.max.time())
         )
+        
+        if fan_club_id:
+            churned_query = churned_query.filter(Subscription.fan_club_id == fan_club_id)
+        if creator_id:
+            churned_query = churned_query.join(FanClub).filter(FanClub.creator_id == creator_id)
+        
+        churned = churned_query.scalar() or 0
+        
+        # Get ending subscribers
+        ending_query = self.db.query(func.count(Subscription.id)).filter(
+            Subscription.started_at <= datetime.combine(month_end, datetime.min.time()),
+            or_(
+                Subscription.cancelled_at >= datetime.combine(next_month_start, datetime.max.time()),
+                Subscription.cancelled_at == None
+            ),
+            Subscription.status != "cancelled"
+        )
+        
+        if fan_club_id:
+            ending_query = ending_query.filter(Subscription.fan_club_id == fan_club_id)
+        if creator_id:
+            ending_query = ending_query.join(FanClub).filter(FanClub.creator_id == creator_id)
+        
+        ending_subs = ending_query.scalar() or 0
+        
+        # Calculate churn rate
+        churn_rate = 0
+        if beginning_subs > 0:
+            churn_rate = (churned / beginning_subs) * 100
         
         return {
-            "exclusive_content_count": exclusive_content_count,
-            "total_views": total_views,
-            "active_subscribers": active_subs,
-            "avg_views_per_content": round(avg_views_per_content, 2),
-            "engagement_rate_percent": round(engagement_rate, 2),
-            "views_per_subscriber": round(total_views / active_subs, 2) if active_subs > 0 else 0
+            'churn_rate': round(churn_rate, 2),
+            'churned_subscribers': churned,
+            'beginning_subscribers': beginning_subs,
+            'ending_subscribers': ending_subs,
+            'month': month_start.strftime('%Y-%m')
         }
     
-    def get_comprehensive_analytics(self, fan_club_id: str) -> Dict:
+    def get_churn_reasons(
+        self,
+        limit: int = 10,
+        fan_club_id: Optional[int] = None
+    ) -> List[Dict]:
         """
-        Get all analytics in one call.
-        
-        Args:
-            fan_club_id: Fan club ID
+        Get most common churn reasons.
         
         Returns:
-            Dict with all analytics data
+            [
+                {
+                    'reason': 'Low engagement',
+                    'count': 5,
+                    'percentage': 10.5
+                },
+                ...
+            ]
         """
+        query = self.db.query(
+            Subscription.cancellation_reason,
+            func.count(Subscription.id).label('count')
+        ).filter(
+            Subscription.cancellation_reason != None,
+            Subscription.cancelled_at != None
+        )
+        
+        if fan_club_id:
+            query = query.filter(Subscription.fan_club_id == fan_club_id)
+        
+        results = query.group_by(Subscription.cancellation_reason).order_by(
+            func.count(Subscription.id).desc()
+        ).limit(limit).all()
+        
+        total = sum(r[1] for r in results)
+        
+        return [
+            {
+                'reason': reason or 'Unknown',
+                'count': count,
+                'percentage': round((count / total * 100) if total > 0 else 0, 2)
+            }
+            for reason, count in results
+        ]
+    
+    # ==================== RETENTION METRICS ====================
+    
+    def get_retention_cohort(
+        self,
+        cohort_month: date,
+        months_back: int = 12,
+        fan_club_id: Optional[int] = None
+    ) -> Dict:
+        """
+        Calculate retention cohort for subscribers started in a month.
+        
+        Shows what % of subscribers from cohort_month are still active
+        after N months.
+        
+        Args:
+            cohort_month: Month subscribers started
+            months_back: Number of months to track back
+            fan_club_id: Filter by fan club
+        
+        Returns:
+            {
+                'cohort_month': '2025-01',
+                'cohort_size': 50,
+                'retention': [
+                    {'month': 0, 'retained': 50, 'percentage': 100},
+                    {'month': 1, 'retained': 45, 'percentage': 90},
+                    ...
+                ]
+            }
+        """
+        cohort_start = date(cohort_month.year, cohort_month.month, 1)
+        if cohort_month.month == 12:
+            cohort_end = date(cohort_month.year + 1, 1, 1) - timedelta(days=1)
+        else:
+            cohort_end = date(cohort_month.year, cohort_month.month + 1, 1) - timedelta(days=1)
+        
+        # Get cohort size
+        cohort_query = self.db.query(Subscription).filter(
+            Subscription.started_at >= datetime.combine(cohort_start, datetime.min.time()),
+            Subscription.started_at <= datetime.combine(cohort_end, datetime.max.time())
+        )
+        
+        if fan_club_id:
+            cohort_query = cohort_query.filter(Subscription.fan_club_id == fan_club_id)
+        
+        cohort_subs = cohort_query.all()
+        cohort_size = len(cohort_subs)
+        
+        if cohort_size == 0:
+            return {
+                'cohort_month': cohort_start.strftime('%Y-%m'),
+                'cohort_size': 0,
+                'retention': []
+            }
+        
+        # Track retention over months
+        retention = []
+        for month_offset in range(months_back):
+            check_date = cohort_start + timedelta(days=30 * month_offset)
+            
+            retained = 0
+            for sub in cohort_subs:
+                if sub.cancelled_at is None or sub.cancelled_at > check_date:
+                    retained += 1
+            
+            retention.append({
+                'month': month_offset,
+                'retained': retained,
+                'percentage': round((retained / cohort_size * 100), 2)
+            })
+        
         return {
-            "mrr": self.calculate_mrr(fan_club_id),
-            "churn": self.calculate_churn_rate(fan_club_id, period_months=1),
-            "ltv": self.calculate_ltv(fan_club_id),
-            "retention_cohorts": self.calculate_retention_cohorts(fan_club_id),
-            "revenue_forecast": self.forecast_revenue(fan_club_id, months=3),
-            "engagement": self.get_engagement_metrics(fan_club_id),
-            "generated_at": datetime.utcnow().isoformat()
+            'cohort_month': cohort_start.strftime('%Y-%m'),
+            'cohort_size': cohort_size,
+            'retention': retention
+        }
+    
+    def get_retention_matrix(
+        self,
+        months: int = 12,
+        fan_club_id: Optional[int] = None
+    ) -> List[Dict]:
+        """
+        Get retention matrix for last N months.
+        
+        Returns:
+            [
+                {
+                    'cohort_month': '2025-01',
+                    'cohort_size': 50,
+                    'retention_percentages': [100, 90, 85, 82, ...]
+                },
+                ...
+            ]
+        """
+        cohorts = []
+        now = datetime.utcnow().date()
+        
+        for i in range(months):
+            cohort_month = now - timedelta(days=30 * i)
+            cohort_data = self.get_retention_cohort(cohort_month, 12, fan_club_id)
+            
+            if cohort_data['cohort_size'] > 0:
+                cohorts.append({
+                    'cohort_month': cohort_data['cohort_month'],
+                    'cohort_size': cohort_data['cohort_size'],
+                    'retention_percentages': [r['percentage'] for r in cohort_data['retention']]
+                })
+        
+        return cohorts
+    
+    # ==================== FORECASTING ====================
+    
+    def forecast_revenue(
+        self,
+        months_ahead: int = 6,
+        method: str = 'linear',
+        fan_club_id: Optional[int] = None,
+        creator_id: Optional[int] = None
+    ) -> List[Dict]:
+        """
+        Forecast future revenue.
+        
+        Methods:
+        - 'linear': Linear regression on historical data
+        - 'seasonal': Seasonal adjustment
+        
+        Args:
+            months_ahead: Number of months to forecast
+            method: Forecasting method
+            fan_club_id: Filter by fan club
+            creator_id: Filter by creator
+        
+        Returns:
+            [
+                {
+                    'month': '2026-09',
+                    'forecast_mrr': Decimal,
+                    'confidence_interval': (low, high),
+                    'method': 'linear'
+                },
+                ...
+            ]
+        """
+        # Get historical data (last 12 months)
+        trend = self.get_revenue_trend(12, fan_club_id, creator_id)
+        
+        if len(trend) < 3:
+            # Not enough data for forecast
+            return []
+        
+        mrr_values = [Decimal(t['mrr']) for t in trend]
+        
+        if method == 'linear':
+            return self._forecast_linear(mrr_values, months_ahead)
+        elif method == 'seasonal':
+            return self._forecast_seasonal(mrr_values, months_ahead, trend)
+        else:
+            return []
+    
+    def _forecast_linear(
+        self,
+        historical_values: List[Decimal],
+        months_ahead: int
+    ) -> List[Dict]:
+        """Linear regression forecast."""
+        if len(historical_values) < 2:
+            return []
+        
+        # Calculate trend using simple linear regression
+        n = len(historical_values)
+        x_values = list(range(n))
+        y_values = [float(v) for v in historical_values]
+        
+        # Calculate slope and intercept
+        x_mean = sum(x_values) / n
+        y_mean = sum(y_values) / n
+        
+        numerator = sum((x_values[i] - x_mean) * (y_values[i] - y_mean) for i in range(n))
+        denominator = sum((x_values[i] - x_mean) ** 2 for i in range(n))
+        
+        slope = numerator / denominator if denominator != 0 else 0
+        intercept = y_mean - slope * x_mean
+        
+        # Generate forecast
+        forecast = []
+        now = datetime.utcnow().date()
+        
+        for i in range(1, months_ahead + 1):
+            predicted_value = slope * (n + i) + intercept
+            predicted_value = max(0, predicted_value)  # No negative revenue
+            
+            # Calculate confidence interval (±20%)
+            ci_low = predicted_value * 0.8
+            ci_high = predicted_value * 1.2
+            
+            forecast_month = now + timedelta(days=30 * i)
+            
+            forecast.append({
+                'month': forecast_month.strftime('%Y-%m'),
+                'forecast_mrr': Decimal(str(round(predicted_value, 2))),
+                'confidence_interval': (
+                    Decimal(str(round(ci_low, 2))),
+                    Decimal(str(round(ci_high, 2)))
+                ),
+                'method': 'linear'
+            })
+        
+        return forecast
+    
+    def _forecast_seasonal(
+        self,
+        historical_values: List[Decimal],
+        months_ahead: int,
+        trend_data: List[Dict]
+    ) -> List[Dict]:
+        """Seasonal forecast with trend adjustment."""
+        # For now, use linear as base
+        # In production, implement full seasonal decomposition
+        return self._forecast_linear(historical_values, months_ahead)
+    
+    # ==================== ENGAGEMENT METRICS ====================
+    
+    def get_subscriber_activity(
+        self,
+        subscriber_id: int,
+        days: int = 30
+    ) -> Dict:
+        """
+        Get subscriber activity metrics.
+        
+        Returns:
+            {
+                'subscriber_id': 1,
+                'content_views': 45,
+                'posts_liked': 10,
+                'messages_sent': 3,
+                'last_activity': '2026-08-31',
+                'engagement_score': 85
+            }
+        """
+        since = datetime.utcnow() - timedelta(days=days)
+        
+        # Count content views (TODO: implement content view tracking)
+        content_views = 0
+        
+        # Count posts liked (TODO: implement post engagement)
+        posts_liked = 0
+        
+        # Count messages sent (TODO: implement message tracking)
+        messages_sent = 0
+        
+        # Get last activity
+        last_activity = None
+        
+        # Calculate engagement score (0-100)
+        engagement_score = min(100, (content_views * 2 + posts_liked + messages_sent) // 2)
+        
+        return {
+            'subscriber_id': subscriber_id,
+            'content_views': content_views,
+            'posts_liked': posts_liked,
+            'messages_sent': messages_sent,
+            'last_activity': last_activity,
+            'engagement_score': engagement_score,
+            'period_days': days
+        }
+    
+    def get_creator_metrics(
+        self,
+        creator_id: int,
+        days: int = 30
+    ) -> Dict:
+        """
+        Get creator fan club metrics.
+        
+        Returns:
+            {
+                'creator_id': 1,
+                'fan_clubs': 2,
+                'total_subscribers': 150,
+                'total_mrr': Decimal('1500.00'),
+                'average_tier_price': Decimal('10.00'),
+                'top_tier': 'Premium',
+                'churn_rate': 2.5
+            }
+        """
+        fan_clubs = self.db.query(FanClub).filter(
+            FanClub.creator_id == creator_id
+        ).all()
+        
+        total_subscribers = 0
+        total_mrr = Decimal(0)
+        
+        for fan_club in fan_clubs:
+            active_subs = self.db.query(func.count(Subscription.id)).filter(
+                Subscription.fan_club_id == fan_club.id,
+                Subscription.status == "active"
+            ).scalar() or 0
+            
+            total_subscribers += active_subs
+            
+            # Calculate fan club MRR
+            fc_mrr = self.db.query(func.sum(MembershipTier.price)).join(
+                Subscription
+            ).filter(
+                Subscription.fan_club_id == fan_club.id,
+                Subscription.status == "active"
+            ).scalar() or Decimal(0)
+            
+            total_mrr += fc_mrr
+        
+        # Get average tier price
+        avg_tier_price = Decimal(0)
+        if total_subscribers > 0:
+            avg_tier_price = total_mrr / total_subscribers
+        
+        # Get top tier
+        top_tier = self.db.query(MembershipTier).join(
+            Subscription
+        ).filter(
+            FanClub.creator_id == creator_id
+        ).group_by(MembershipTier.id).order_by(
+            func.count(Subscription.id).desc()
+        ).first()
+        
+        top_tier_name = top_tier.name if top_tier else "N/A"
+        
+        # Get churn rate (last month)
+        month_start = (datetime.utcnow().date()).replace(day=1)
+        churn_data = self.get_churn_rate(month_start, None, creator_id)
+        
+        return {
+            'creator_id': creator_id,
+            'fan_clubs': len(fan_clubs),
+            'total_subscribers': total_subscribers,
+            'total_mrr': total_mrr,
+            'average_tier_price': avg_tier_price,
+            'top_tier': top_tier_name,
+            'churn_rate': churn_data['churn_rate'],
+            'period_days': days
+        }
+    
+    def get_fan_club_metrics(
+        self,
+        fan_club_id: int,
+        days: int = 30
+    ) -> Dict:
+        """
+        Get fan club metrics.
+        
+        Returns:
+            {
+                'fan_club_id': 1,
+                'name': 'The Weeknd Premium',
+                'total_subscribers': 500,
+                'active_subscribers': 450,
+                'cancelled_subscribers': 50,
+                'mrr': Decimal('5000.00'),
+                'growth_rate': 15.2,
+                'engagement_rate': 65.5
+            }
+        """
+        fan_club = self.db.query(FanClub).filter(
+            FanClub.id == fan_club_id
+        ).first()
+        
+        if not fan_club:
+            return {}
+        
+        # Total and active subscriptions
+        total_subs = self.db.query(func.count(Subscription.id)).filter(
+            Subscription.fan_club_id == fan_club_id
+        ).scalar() or 0
+        
+        active_subs = self.db.query(func.count(Subscription.id)).filter(
+            Subscription.fan_club_id == fan_club_id,
+            Subscription.status == "active"
+        ).scalar() or 0
+        
+        cancelled_subs = self.db.query(func.count(Subscription.id)).filter(
+            Subscription.fan_club_id == fan_club_id,
+            Subscription.status == "cancelled"
+        ).scalar() or 0
+        
+        # Get MRR
+        mrr_data = self.get_mrr(fan_club_id=fan_club_id)
+        
+        # Calculate growth rate
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        new_subs = self.db.query(func.count(Subscription.id)).filter(
+            Subscription.fan_club_id == fan_club_id,
+            Subscription.started_at >= cutoff
+        ).scalar() or 0
+        
+        growth_rate = 0
+        if active_subs > 0:
+            growth_rate = (new_subs / active_subs) * 100
+        
+        # Calculate engagement (placeholder)
+        engagement_rate = 0
+        
+        return {
+            'fan_club_id': fan_club_id,
+            'name': fan_club.name,
+            'total_subscribers': total_subs,
+            'active_subscribers': active_subs,
+            'cancelled_subscribers': cancelled_subs,
+            'mrr': mrr_data['mrr'],
+            'growth_rate': round(growth_rate, 2),
+            'engagement_rate': round(engagement_rate, 2),
+            'period_days': days
         }

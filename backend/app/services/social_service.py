@@ -13,8 +13,8 @@ import uuid
 import json
 
 from app.models.social import (
-    Post, PostLike, PostComment, CommentLike, PostShare, 
-    Follow, PostBookmark, PollVote
+    Post, PostLike, PostComment, PostCommentLike, PostShare, 
+    Follow, PostSave, PollVote
 )
 from app.models.user import User
 from app.models.track import Track
@@ -41,7 +41,7 @@ class SocialService:
         """Create a new post"""
         
         # Validate post type
-        valid_types = ["status", "track_share", "event", "milestone", "poll"]
+        valid_types = ["text", "track_share", "media", "poll", "event", "milestone"]
         if post_type not in valid_types:
             raise ValueError(f"Invalid post type. Must be one of: {', '.join(valid_types)}")
         
@@ -57,11 +57,11 @@ class SocialService:
         post = Post(
             id=str(uuid.uuid4()),
             user_id=user_id,
-            post_type=post_type,
+            type=post_type,
             content=content,
-            media_url=media_url,
+            media_urls=[media_url] if media_url else None,
             track_id=track_id,
-            event_date=event_date,
+            event_data={"date": event_date} if event_date else None,
             visibility=visibility
         )
         
@@ -278,6 +278,34 @@ class SocialService:
         db.commit()
         
         return is_liked, post.like_count
+    
+    @staticmethod
+    def unlike_post(db: Session, post_id: str, user_id: str) -> int:
+        """
+        Unlike a post. Returns updated like_count.
+        Raises ValueError if post not found or post not liked by user.
+        """
+        # Check if post exists
+        post = db.query(Post).filter(Post.id == post_id).first()
+        if not post:
+            raise ValueError("Post not found")
+        
+        # Check if user has liked the post
+        existing_like = db.query(PostLike).filter(
+            PostLike.post_id == post_id,
+            PostLike.user_id == user_id
+        ).first()
+        
+        if not existing_like:
+            raise ValueError("Post not liked by user")
+        
+        # Remove like
+        db.delete(existing_like)
+        post.like_count = max(0, post.like_count - 1)
+        
+        db.commit()
+        
+        return post.like_count
     
     @staticmethod
     def is_post_liked(db: Session, post_id: str, user_id: str) -> bool:
@@ -527,16 +555,16 @@ class SocialService:
     def toggle_bookmark(db: Session, post_id: str, user_id: str) -> bool:
         """Bookmark or unbookmark a post. Returns is_bookmarked"""
         
-        existing_bookmark = db.query(PostBookmark).filter(
-            PostBookmark.post_id == post_id,
-            PostBookmark.user_id == user_id
+        existing_bookmark = db.query(PostSave).filter(
+            PostSave.post_id == post_id,
+            PostSave.user_id == user_id
         ).first()
         
         if existing_bookmark:
             db.delete(existing_bookmark)
             is_bookmarked = False
         else:
-            bookmark = PostBookmark(
+            bookmark = PostSave(
                 id=str(uuid.uuid4()),
                 post_id=post_id,
                 user_id=user_id
@@ -557,12 +585,12 @@ class SocialService:
     ) -> Tuple[List[Post], int]:
         """Get user's bookmarked posts"""
         
-        query = db.query(Post).join(PostBookmark).filter(
-            PostBookmark.user_id == user_id
+        query = db.query(Post).join(PostSave).filter(
+            PostSave.user_id == user_id
         )
         
         total = query.count()
-        posts = query.order_by(desc(PostBookmark.created_at)).offset((page - 1) * page_size).limit(page_size).all()
+        posts = query.order_by(desc(PostSave.created_at)).offset((page - 1) * page_size).limit(page_size).all()
         
         return posts, total
     

@@ -3,7 +3,7 @@ Privacy Service - Business logic for messaging privacy and blocking
 Tasks 5.1-5.4: Privacy settings, message requests, blocking, reporting
 """
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
 from fastapi import HTTPException, status
 from typing import Optional, Dict, Tuple
 from datetime import datetime
