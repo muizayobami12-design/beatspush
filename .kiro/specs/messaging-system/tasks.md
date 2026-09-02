@@ -209,7 +209,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Apply rate limit: 60 requests per minute
     - _Requirements: 1.7, 1.8, 1.9, 8.1, 8.3, 8.4, 8.6, 8.7_
   
-  - [-] 8.2 Implement POST /api/v1/conversations endpoint
+  - [x] 8.2 Implement POST /api/v1/conversations endpoint
     - Create endpoint accepting CreateConversationRequest (recipient_id)
     - Authenticate current user
     - Check if conversation already exists or create new one via MessagingService
@@ -217,20 +217,20 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Return ConversationResponse with appropriate is_message_request flag
     - _Requirements: 1.1, 1.2, 5.1, 5.2_
   
-  - [-] 8.3 Implement GET /api/v1/conversations/{conversation_id} endpoint
+  - [x] 8.3 Implement GET /api/v1/conversations/{conversation_id} endpoint
     - Create endpoint with conversation_id path parameter
     - Authenticate and verify user has access to conversation
     - Return ConversationResponse with full details
     - _Requirements: 1.2, 1.3_
   
-  - [-] 8.4 Implement DELETE /api/v1/conversations/{conversation_id} endpoint
+  - [x] 8.4 Implement DELETE /api/v1/conversations/{conversation_id} endpoint
     - Create endpoint for soft deleting conversation
     - Set left_at timestamp for current user in conversation_participants
     - Return success response
     - _Requirements: 1.9_
 
-- [ ] 9. REST API Endpoints - Messages
-  - [~] 9.1 Implement GET /api/v1/conversations/{conversation_id}/messages endpoint
+- [x] 9. REST API Endpoints - Messages
+  - [x] 9.1 Implement GET /api/v1/conversations/{conversation_id}/messages endpoint
     - Create endpoint with query params: page, page_size, cursor, before, after
     - Verify user has access to conversation
     - Call MessagingService.get_messages() with cursor-based pagination
@@ -238,7 +238,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Support infinite scroll with next_cursor
     - _Requirements: 1.4, 1.5, 2.8, 11.3, 11.4_
   
-  - [~] 9.2 Implement POST /api/v1/messages endpoint
+  - [x] 9.2 Implement POST /api/v1/messages endpoint
     - Create endpoint accepting SendMessageRequest (recipient_id or conversation_id, content)
     - Authenticate current user as sender
     - Validate message content: sanitize HTML, check length (1-2000 chars)
@@ -250,7 +250,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Return MessageResponse with 201 status
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 10.1, 10.2_
   
-  - [~] 9.3 Implement PUT /api/v1/messages/{message_id} endpoint
+  - [x] 9.3 Implement PUT /api/v1/messages/{message_id} endpoint
     - Create endpoint accepting UpdateMessageRequest (content)
     - Verify current user is message sender
     - Check message age (must be within 15 minutes)
@@ -259,7 +259,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Return updated MessageResponse
     - _Requirements: 2.1, 2.2_
   
-  - [~] 9.4 Implement DELETE /api/v1/messages/{message_id} endpoint
+  - [x] 9.4 Implement DELETE /api/v1/messages/{message_id} endpoint
     - Create endpoint for soft deleting message
     - Verify current user is message sender
     - Call MessagingService.delete_message()
@@ -267,7 +267,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Return success response
     - _Requirements: 2.1_
   
-  - [~] 9.5 Implement POST /api/v1/messages/{message_id}/read endpoint
+  - [x] 9.5 Implement POST /api/v1/messages/{message_id}/read endpoint
     - Create endpoint to mark message as read
     - Verify user is conversation participant
     - Call MessagingService.mark_message_read()
@@ -275,7 +275,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Return success response
     - _Requirements: 3.1, 3.2, 3.6, 3.7_
   
-  - [~] 9.6 Implement POST /api/v1/messages/{message_id}/attachments endpoint
+  - [x] 9.6 Implement POST /api/v1/messages/{message_id}/attachments endpoint
     - Create endpoint accepting multipart file upload
     - Verify user owns the message
     - Validate file via FileAttachmentService
@@ -284,20 +284,20 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Return AttachmentResponse
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.9, 4.10_
   
-  - [~] 9.7 Implement GET /api/v1/conversations/{conversation_id}/poll endpoint
+  - [x] 9.7 Implement GET /api/v1/conversations/{conversation_id}/poll endpoint
     - Create polling fallback endpoint with since timestamp parameter
     - Return new messages since timestamp and typing users
     - Support clients without WebSocket capability
     - _Requirements: 7.5, 7.7_
 
-- [ ] 10. REST API Endpoints - Message Requests
-  - [-] 10.1 Implement GET /api/v1/message-requests endpoint
+- [x] 10. REST API Endpoints - Message Requests
+  - [x] 10.1 Implement GET /api/v1/message-requests endpoint
     - Create endpoint with pagination: page, page_size
     - Filter conversations where is_message_request=true and request_status='pending'
     - Return ConversationListResponse
     - _Requirements: 5.2_
   
-  - [~] 10.2 Implement POST /api/v1/message-requests/{conversation_id}/accept endpoint
+  - [x] 10.2 Implement POST /api/v1/message-requests/{conversation_id}/accept endpoint
     - Create endpoint to accept message request
     - Verify current user is recipient
     - Call PrivacyService.accept_message_request()
@@ -305,54 +305,54 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Return updated ConversationResponse
     - _Requirements: 5.3, 5.4_
   
-  - [~] 10.3 Implement POST /api/v1/message-requests/{conversation_id}/decline endpoint
+  - [x] 10.3 Implement POST /api/v1/message-requests/{conversation_id}/decline endpoint
     - Create endpoint to decline message request
     - Verify current user is recipient
     - Call PrivacyService.decline_message_request()
     - Return success response
     - _Requirements: 5.3, 5.5_
 
-- [ ] 11. REST API Endpoints - Privacy and Blocking
-  - [ ] 11.1 Implement GET /api/v1/messaging/settings endpoint
+- [x] 11. REST API Endpoints - Privacy and Blocking
+  - [x] 11.1 Implement GET /api/v1/messaging/settings endpoint
     - Create endpoint to retrieve user's message settings
     - Call PrivacyService.get_user_settings()
     - Return SettingsResponse
     - _Requirements: 5.9_
   
-  - [~] 11.2 Implement PUT /api/v1/messaging/settings endpoint
+  - [x] 11.2 Implement PUT /api/v1/messaging/settings endpoint
     - Create endpoint accepting UpdateSettingsRequest
     - Call PrivacyService.update_user_settings()
     - Return updated SettingsResponse
     - _Requirements: 5.9_
   
-  - [~] 11.3 Implement POST /api/v1/messaging/block endpoint
+  - [x] 11.3 Implement POST /api/v1/messaging/block endpoint
     - Create endpoint accepting BlockUserRequest (user_id, reason)
     - Verify not blocking self
     - Call PrivacyService.block_user()
     - Return success response
     - _Requirements: 6.1, 6.2, 6.3, 6.10_
   
-  - [~] 11.4 Implement DELETE /api/v1/messaging/block/{user_id} endpoint
+  - [x] 11.4 Implement DELETE /api/v1/messaging/block/{user_id} endpoint
     - Create endpoint to unblock user
     - Call PrivacyService.unblock_user()
     - Return success response
     - _Requirements: 6.4, 6.5_
   
-  - [~] 11.5 Implement GET /api/v1/messaging/blocked-users endpoint
+  - [x] 11.5 Implement GET /api/v1/messaging/blocked-users endpoint
     - Create endpoint with pagination
     - Call PrivacyService.get_blocked_users()
     - Return list of BlockedUserResponse
     - _Requirements: 6.1, 6.2_
   
-  - [~] 11.6 Implement POST /api/v1/messages/{message_id}/report endpoint
+  - [x] 11.6 Implement POST /api/v1/messages/{message_id}/report endpoint
     - Create endpoint accepting ReportMessageRequest (reason, details)
     - Validate reason enum
     - Call PrivacyService.report_message()
     - Return success response
     - _Requirements: 6.6, 6.7, 6.8, 6.9_
 
-- [ ] 12. WebSocket Endpoint Implementation
-  - [~] 12.1 Create WebSocket authentication dependency
+- [x] 12. WebSocket Endpoint Implementation
+  - [x] 12.1 Create WebSocket authentication dependency
     - Write `get_current_user_ws(websocket)` dependency function
     - Extract JWT token from query parameter or header
     - Decode and validate token
@@ -360,7 +360,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Return authenticated user
     - _Requirements: 7.4_
   
-  - [~] 12.2 Implement WebSocket endpoint WS /ws/conversations
+  - [x] 12.2 Implement WebSocket endpoint WS /ws/conversations
     - Create WebSocket endpoint at `/ws/conversations`
     - Authenticate via get_current_user_ws dependency
     - Register connection with ConnectionManager.connect()
@@ -370,7 +370,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - On disconnect or error, call ConnectionManager.disconnect()
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.6_
   
-  - [~] 12.3 Implement WebSocket rate limiting
+  - [x] 12.3 Implement WebSocket rate limiting
     - Create `RateLimitedWebSocketManager` extending ConnectionManager
     - Add `message_counts` and `typing_counts` dictionaries tracking timestamps per user
     - Write `check_rate_limit(user_id, action, limit, window)` method
@@ -379,7 +379,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - _Requirements: 7.1, 7.2_
 
 - [ ] 13. Notification Integration
-  - [~] 13.1 Integrate with existing NotificationService
+  - [x] 13.1 Integrate with existing NotificationService
     - Write helper function `create_message_notification(message, recipient_id)`
     - Call NotificationService with: type='new_message', sender_username, message_preview (first 50 chars), conversation_id
     - Write helper function `create_message_request_notification(conversation, recipient_id)`
@@ -390,7 +390,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8_
 
 - [ ] 14. Performance Optimizations
-  - [~] 14.1 Implement Redis caching layer
+  - [x] 14.1 Implement Redis caching layer
     - Create `MessagingCache` class with Redis client
     - Write methods: `cache_conversation()`, `get_conversation()`, `invalidate_conversation()`, `cache_user_settings()`, `get_unread_count()`, `increment_unread()`, `reset_unread()`
     - Set appropriate TTLs: conversations (5 min), settings (1 hour), unread counts (invalidate on read)
@@ -398,41 +398,41 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Invalidate cache on updates
     - _Requirements: 11.1, 11.7_
   
-  - [~] 14.2 Add database query optimizations
+  - [x] 14.2 Add database query optimizations
     - Add indexes to migration: `idx_conv_participants_user_active`, `idx_messages_conv_created`, `idx_participants_unread`, `idx_blocks_both`, `idx_messages_content_gin` (GIN for full-text search)
     - Optimize conversation list query with joins and WHERE clauses
     - Use denormalized data: last_message_preview in conversations table
     - Implement cursor-based pagination for messages (avoid offset)
     - _Requirements: 11.1, 11.2, 11.3, 11.5, 11.6, 11.7, 11.8_
   
-  - [~] 14.3 Implement bandwidth optimizations
+  - [x] 14.3 Implement bandwidth optimizations
     - Create minimal WebSocket message payload with shortened keys (id, cid, s, c, t, a)
     - Implement image optimization: generate 200x200 thumbnail (<50KB) and optimized full image (<500KB)
     - Implement audio compression: create 64kbps preview and full quality versions
     - Add support for resumable file uploads using chunked upload
     - _Requirements: 11.9, 11.10_
 
-- [ ] 15. Security Implementation
-  - [~] 15.1 Implement input validation and sanitization
+- [x] 15. Security Implementation
+  - [x] 15.1 Implement input validation and sanitization
     - Write `sanitize_message_content(content)` using bleach: strip HTML tags, escape entities, trim whitespace, validate length
     - Integrate sanitization in SendMessageRequest validation
     - Add file validation for malicious content (optional ClamAV integration)
     - _Requirements: 2.4, 4.1_
   
-  - [~] 15.2 Implement access control and authorization
+  - [x] 15.2 Implement access control and authorization
     - Write `verify_conversation_access(conversation_id, user_id)` checking conversation_participants table
     - Apply access check in all conversation and message endpoints
     - Verify message sender for edit/delete operations
     - Enforce block rules at API layer before service calls
     - _Requirements: 1.9, 2.6, 2.7_
   
-  - [~] 15.3 Add rate limiting to API endpoints
+  - [x] 15.3 Add rate limiting to API endpoints
     - Install and configure slowapi rate limiter
     - Apply limits: 30/min for POST /messages, 10/min for file uploads, 60/min for GET /conversations
     - Return 429 Too Many Requests with Retry-After header
     - _Requirements: 2.5_
   
-  - [~] 15.4 Implement error handling and logging
+  - [x] 15.4 Implement error handling and logging
     - Create `ErrorResponse` Pydantic model with fields: error, detail, code, timestamp, request_id
     - Define `MessageError` enum with error codes: BLOCKED_USER, USER_NOT_ACCEPTING_MESSAGES, CONVERSATION_NOT_FOUND, etc.
     - Add exception handlers for HTTPException and general Exception
@@ -441,11 +441,11 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Redact sensitive data in error traces
     - _Requirements: 2.6, 2.7, 4.10, 6.10_
 
-- [~] 16. Checkpoint - Backend Complete
+- [x] 16. Checkpoint - Backend Complete
   - Ensure all backend tests pass, verify API endpoints with Postman/Insomnia, check WebSocket connections, ask user if questions arise.
 
 - [ ] 17. Frontend - Conversation List Component
-  - [~] 17.1 Create ConversationList component
+  - [x] 17.1 Create ConversationList component
     - Create Next.js component: `components/messaging/ConversationList.tsx`
     - Fetch conversations from GET /api/v1/conversations with pagination
     - Display conversation items with: participant avatar, name, last message preview, timestamp, unread count badge
@@ -455,7 +455,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Handle loading, empty, and error states
     - _Requirements: 1.7, 1.8, 8.1, 8.3, 8.4, 8.6_
   
-  - [~] 17.2 Create ConversationListItem component
+  - [x] 17.2 Create ConversationListItem component
     - Extract conversation item to separate component: `ConversationListItem.tsx`
     - Display participant info, last message text, timestamp (formatted relative time)
     - Show unread count badge if unread_count > 0
@@ -464,8 +464,8 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Make clickable to open conversation thread
     - _Requirements: 1.7, 1.8, 5.1, 5.2_
 
-- [ ] 18. Frontend - Message Thread Component
-  - [~] 18.1 Create MessageThread component
+- [x] 18. Frontend - Message Thread Component
+  - [x] 18.1 Create MessageThread component
     - Create component: `components/messaging/MessageThread.tsx`
     - Fetch messages from GET /api/v1/conversations/{id}/messages with cursor-based pagination
     - Display messages in chronological order (oldest to newest)
@@ -475,7 +475,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Auto-scroll to bottom on new message
     - _Requirements: 1.4, 1.5, 2.8, 3.6, 11.4_
   
-  - [~] 18.2 Create MessageBubble component
+  - [x] 18.2 Create MessageBubble component
     - Extract message bubble to component: `MessageBubble.tsx`
     - Render different styles for sent vs received messages
     - Display message content with proper text wrapping
@@ -486,7 +486,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Add context menu for edit/delete (show for own messages only)
     - _Requirements: 2.8, 3.6, 4.9_
   
-  - [~] 18.3 Create MessageInput component
+  - [x] 18.3 Create MessageInput component
     - Create component: `MessageInput.tsx` with textarea
     - Implement auto-resize textarea (grows with content)
     - Add character counter (0/2000)
@@ -496,15 +496,15 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Show loading state during send
     - _Requirements: 2.1, 2.4_
   
-  - [~] 18.4 Implement typing indicator display
+  - [x] 18.4 Implement typing indicator display
     - Add typing indicator UI: "User is typing..." with animated dots
     - Display at bottom of message thread
     - Show/hide based on WebSocket typing_indicator events
     - Handle multiple users typing: "User1 and User2 are typing..."
     - _Requirements: 7.1, 7.2_
 
-- [ ] 19. Frontend - WebSocket Integration
-  - [~] 19.1 Create WebSocket hook and context
+- [x] 19. Frontend - WebSocket Integration
+  - [x] 19.1 Create WebSocket hook and context
     - Create React hook: `hooks/useWebSocket.ts`
     - Establish WebSocket connection to /ws/conversations with JWT token
     - Create WebSocket context provider for global connection management
@@ -512,7 +512,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Implement exponential backoff for reconnection attempts
     - _Requirements: 7.4_
   
-  - [~] 19.2 Implement WebSocket event handling
+  - [x] 19.2 Implement WebSocket event handling
     - Create `useMessagingEvents(conversationId)` hook
     - Listen for WebSocket events: new_message, typing_indicator, message_read, user_online, user_offline
     - Update local state on new_message: append to message list, update conversation last_activity
@@ -520,13 +520,13 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Update read receipts on message_read events
     - _Requirements: 7.1, 7.6_
   
-  - [~] 19.3 Implement typing indicator sending
+  - [x] 19.3 Implement typing indicator sending
     - Send typing_start event when user begins typing in MessageInput
     - Send typing_stop event when user stops typing for 3 seconds or sends message
     - Debounce typing events to avoid excessive WebSocket traffic
     - _Requirements: 7.1, 7.2, 7.3_
   
-  - [~] 19.4 Implement polling fallback
+  - [x] 19.4 Implement polling fallback
     - Detect WebSocket connection failure
     - Fall back to polling GET /api/v1/conversations/{id}/poll every 3 seconds
     - Display "Offline mode" indicator in UI
@@ -534,7 +534,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - _Requirements: 7.5, 7.7_
 
 - [ ] 20. Frontend - File Attachments
-  - [~] 20.1 Create FileUpload component
+  - [x] 20.1 Create FileUpload component
     - Create component: `FileUpload.tsx` with file input
     - Support drag-and-drop and click-to-browse
     - Validate file type and size on client side before upload
@@ -544,7 +544,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Handle upload errors with user-friendly messages
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.10_
   
-  - [~] 20.2 Create AttachmentPreview component
+  - [x] 20.2 Create AttachmentPreview component
     - Create component: `AttachmentPreview.tsx`
     - Display image attachments with thumbnail and lightbox for full view
     - Display audio attachments with inline player (play/pause, progress bar, duration)
@@ -553,7 +553,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Show file size and original filename
     - _Requirements: 4.6, 4.8, 4.9_
   
-  - [~] 20.3 Implement voice note recording
+  - [-] 20.3 Implement voice note recording
     - Create component: `VoiceNoteRecorder.tsx`
     - Use browser MediaRecorder API to capture audio
     - Show recording timer and waveform visualization during recording
@@ -563,7 +563,7 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - _Requirements: 4.8_
 
 - [ ] 21. Frontend - Message Requests
-  - [~] 21.1 Create MessageRequests component
+  - [x] 21.1 Create MessageRequests component
     - Create component: `MessageRequests.tsx`
     - Fetch pending message requests from GET /api/v1/message-requests
     - Display list of requests with sender info and first message preview
@@ -573,14 +573,14 @@ This implementation plan breaks down the messaging system for BeatPush into disc
     - Show empty state if no pending requests
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
   
-  - [~] 21.2 Add message request indicator to ConversationList
+  - [x] 21.2 Add message request indicator to ConversationList
     - Show "Message Requests" section at top of conversation list
     - Display count badge: "Message Requests (3)"
     - Navigate to MessageRequests component on click
     - _Requirements: 5.1, 5.2_
 
 - [ ] 22. Frontend - Privacy Settings
-  - [~] 22.1 Create MessagingSettings component
+  - [x] 22.1 Create MessagingSettings component
     - Create settings page: `pages/settings/messaging.tsx`
     - Fetch settings from GET /api/v1/messaging/settings
     - Display form with: message_filter dropdown (everyone, followers, verified, none), read_receipts_enabled toggle, typing_indicators_enabled toggle

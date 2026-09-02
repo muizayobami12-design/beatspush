@@ -1,0 +1,89 @@
+{
+  "expo": {
+    "name": "BeatPush",
+    "slug": "beatpush-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1f2937"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTabletMode": true,
+      "bundleIdentifier": "com.beatpush.ios",
+      "buildNumber": "1.0.0",
+      "infoPlist": {
+        "NSCameraUsageDescription": "BeatPush needs camera access for profile pictures",
+        "NSMicrophoneUsageDescription": "BeatPush needs microphone access for voice messages",
+        "NSPhotoLibraryUsageDescription": "BeatPush needs access to your photos",
+        "NSLocationWhenInUseUsageDescription": "BeatPush uses location for location-based recommendations"
+      },
+      "privacyManifests": [
+        {
+          "NSPrivacyTracking": false,
+          "NSPrivacyTrackingDomains": []
+        }
+      ]
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1f2937"
+      },
+      "package": "com.beatpush.android",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "RECORD_AUDIO",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static",
+            "deploymentTarget": "13.0"
+          },
+          "android": {
+            "compileSdkVersion": 33,
+            "targetSdkVersion": 33,
+            "minSdkVersion": 21
+          }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#a855f7"
+        }
+      ],
+      [
+        "expo-file-system"
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "beatpush-mobile-app"
+      },
+      "apiUrl": "https://api.beatpush.com/api/v1",
+      "wsUrl": "wss://ws.beatpush.com"
+    }
+  }
+}

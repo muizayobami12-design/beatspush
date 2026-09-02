@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>BeatsPush - Fan Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;family=Playfair+Display:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-container": "#342800",
+                        "outline": "#8e9192",
+                        "on-background": "#e5e2e1",
+                        "secondary-fixed-dim": "#e9c349",
+                        "surface-dim": "#141313",
+                        "tertiary-fixed-dim": "#f4bb92",
+                        "outline-variant": "#444748",
+                        "background": "#141313",
+                        "on-error": "#690005",
+                        "surface-container-highest": "#353434",
+                        "tertiary-container": "#1a0800",
+                        "surface": "#141313",
+                        "on-secondary-fixed-variant": "#574500",
+                        "secondary-container": "#af8d11",
+                        "error": "#ffb4ab",
+                        "on-error-container": "#ffdad6",
+                        "on-primary": "#313030",
+                        "on-tertiary": "#4a280a",
+                        "error-container": "#93000a",
+                        "surface-container-high": "#2b2a2a",
+                        "surface-tint": "#c9c6c5",
+                        "on-secondary": "#3c2f00",
+                        "tertiary-fixed": "#ffdcc5",
+                        "on-primary-fixed-variant": "#474646",
+                        "tertiary": "#f4bb92",
+                        "on-surface-variant": "#c4c7c7",
+                        "primary-fixed": "#e5e2e1",
+                        "on-tertiary-container": "#a0704d",
+                        "on-primary-fixed": "#1c1b1b",
+                        "primary": "#c9c6c5",
+                        "surface-container": "#201f1f",
+                        "primary-fixed-dim": "#c9c6c5",
+                        "inverse-on-surface": "#313030",
+                        "surface-bright": "#3a3939",
+                        "on-tertiary-fixed": "#301400",
+                        "inverse-surface": "#e5e2e1",
+                        "on-tertiary-fixed-variant": "#653d1e",
+                        "secondary-fixed": "#ffe088",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-secondary-fixed": "#241a00",
+                        "on-surface": "#e5e2e1",
+                        "on-primary-container": "#7c7a7a",
+                        "surface-container-low": "#1c1b1b",
+                        "secondary": "#e9c349",
+                        "inverse-primary": "#5f5e5e",
+                        "surface-variant": "#353434",
+                        "primary-container": "#0d0d0d"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "margin-desktop": "64px",
+                        "container-max": "1280px",
+                        "unit": "8px",
+                        "stack-sm": "12px",
+                        "stack-md": "24px",
+                        "margin-mobile": "20px",
+                        "stack-lg": "48px",
+                        "sidebar-width": "280px",
+                        "safe": "env(safe-area-inset-bottom)"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Playfair Display"],
+                        "label-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Playfair Display"],
+                        "headline-md": ["Playfair Display"],
+                        "headline-lg": ["Playfair Display"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["32px", { "lineHeight": "40px", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "display-lg": ["64px", { "lineHeight": "72px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["28px", { "lineHeight": "36px", "fontWeight": "500" }],
+                        "headline-lg": ["40px", { "lineHeight": "48px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #0D0D0D;
+            color: #e5e2e1;
+        }
+        .ghost-border {
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .text-muted-gold {
+            color: #D4AF37;
+        }
+        .bg-muted-gold {
+            background-color: #D4AF37;
+        }
+        .border-safari-clay {
+            border-color: #8B5E3C;
+        }
+        .text-safari-clay {
+            color: #8B5E3C;
+        }
+        .bg-safari-clay {
+            background-color: #8B5E3C;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen font-body-md">
+<!-- TopNavBar (Web) -->
+<header class="hidden md:flex justify-between items-center h-16 px-gutter w-full bg-background/80 backdrop-blur-xl border-b border-outline-variant/20 shadow-[0_0_15px_rgba(255,246,223,0.1)] fixed top-0 z-50">
+<div class="flex items-center gap-4">
+<span class="font-display-lg text-headline-md text-primary-container tracking-tighter font-bold">BeatsPush</span>
+<div class="relative ml-8">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant">search</span>
+<input class="bg-surface-container-low border border-outline-variant/20 rounded-full py-2 pl-10 pr-4 text-body-md focus:outline-none focus:border-muted-gold focus:ring-1 focus:ring-muted-gold transition-colors w-64 placeholder-opacity-40" placeholder="Search..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6 text-on-surface-variant">
+<span class="material-symbols-outlined cursor-pointer hover:text-primary transition-colors active:scale-95">notifications</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-primary transition-colors active:scale-95">settings</span>
+<img alt="User profile" class="w-8 h-8 rounded-full object-cover border border-outline-variant/20 cursor-pointer" data-alt="A small, circular avatar portrait of a modern music enthusiast with headphones, looking away from the camera, set against a dark studio background with subtle warm lighting. Modern Heritage aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCVz_v3Tpv6IIVCVw88Sifyj-wQMCCo8GuMnYoZdE3_d42sPNV908dEu6gMosZeSNYAq8bcELkRcGSsT6DUNGVKeRnI3it1KYj8kUM-jMesnvznyVUbJwIUzwSKnyZe3J9bICaWB_0RCX-1H9MDgadQCfJFgYLwbYmvd1XkalbRgHAXSxxn2rAarvXxnF7J8FsdbfXthrBIeBmdSzTrFKgP9Gv2t8Gdh9whKr9O2Jcf5SUkCr5ZT6Ub"/>
+</div>
+</header>
+<!-- SideNavBar (Web) -->
+<nav class="fixed left-0 top-0 h-full w-sidebar-width hidden lg:flex flex-col bg-surface-container-lowest border-r border-outline-variant/10 py-lg z-40 mt-16">
+<div class="flex flex-col flex-grow pt-8">
+<!-- Active Tab -->
+<a class="flex items-center gap-4 bg-secondary-container/20 text-primary-container border-l-4 border-primary-container py-3 px-6 duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-body-md">Dashboard</span>
+</a>
+<!-- Inactive Tabs -->
+<a class="flex items-center gap-4 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high py-3 px-6 transition-all duration-200 ease-in-out border-l-4 border-transparent" href="#">
+<span class="material-symbols-outlined">storefront</span>
+<span class="font-body-md">Marketplace</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high py-3 px-6 transition-all duration-200 ease-in-out border-l-4 border-transparent" href="#">
+<span class="material-symbols-outlined">library_music</span>
+<span class="font-body-md">My Library</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high py-3 px-6 transition-all duration-200 ease-in-out border-l-4 border-transparent" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-body-md">Collaboration</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high py-3 px-6 transition-all duration-200 ease-in-out border-l-4 border-transparent" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-body-md">Earnings</span>
+</a>
+</div>
+<div class="px-6 mb-8 mt-auto">
+<button class="w-full bg-muted-gold text-primary-container font-label-sm py-3 rounded-DEFAULT hover:bg-opacity-90 transition-opacity">Upload Beat</button>
+</div>
+<div class="flex flex-col pb-8">
+<a class="flex items-center gap-4 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high py-3 px-6 transition-all duration-200 ease-in-out border-l-4 border-transparent" href="#">
+<span class="material-symbols-outlined">cached</span>
+<span class="font-body-md">Switch Role</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high py-3 px-6 transition-all duration-200 ease-in-out border-l-4 border-transparent" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-body-md">Help</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="lg:ml-[280px] md:pt-16 min-h-screen px-margin-mobile md:px-margin-desktop py-stack-lg pb-24 md:pb-stack-lg max-w-container-max mx-auto">
+<!-- Header Section -->
+<div class="mb-stack-lg">
+<h1 class="font-headline-lg-mobile md:font-headline-lg text-on-surface mb-2">Welcome Back, Alex</h1>
+<p class="text-on-surface-variant font-body-lg">Discover new sounds and support your favorite artists.</p>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-stack-md">
+<!-- Discovery Feed (Main Feature) -->
+<section class="md:col-span-8 bg-[#1A1A1A] ghost-border rounded-xl overflow-hidden flex flex-col h-full">
+<div class="p-6 border-b border-outline-variant/20 flex justify-between items-center">
+<h2 class="font-headline-md text-on-surface">Discovery Feed</h2>
+<button class="text-muted-gold hover:text-secondary-fixed transition-colors">
+<span class="material-symbols-outlined">filter_list</span>
+</button>
+</div>
+<div class="flex-grow p-6 flex flex-col gap-6 overflow-y-auto max-h-[600px]">
+<!-- Feed Item 1 -->
+<div class="flex gap-4 items-start group">
+<img alt="Artist cover" class="w-24 h-24 object-cover rounded-lg ghost-border" data-alt="A striking portrait of a contemporary electronic music producer in a dimly lit studio, illuminated by a warm, golden glow from a vintage synthesizer. Deep shadows and high contrast, Modern Heritage editorial style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDHKMGqFh6Cb3IJbR16W6WAhRpSN8j-D8habykX8Kaqeb_180W9eeddu6VITZ-p9zOol4VthvC75DEmTn32n2MgcFaxYufu83X_BkC5ou-zxArC46v9uehOLQOtt_H9r2zqsVvSqytmHPBOcPpyStC0N4_rkzyt-YqSyyXIqvj28pbQoS0NSPRQIWtOiOEjEmP_jS0F-Ce3y4jeuTeEdsclqDBGzAFvAP7HY3YP1IvlTsylRj5fjCSQ"/>
+<div class="flex-grow">
+<div class="flex justify-between items-start mb-1">
+<div>
+<h3 class="font-body-lg font-semibold text-on-surface group-hover:text-muted-gold transition-colors cursor-pointer">Neon Genesis EP</h3>
+<p class="text-on-surface-variant font-body-md">by <span class="text-on-surface cursor-pointer hover:underline">Soma</span></p>
+</div>
+<span class="text-label-sm text-outline px-2 py-1 bg-surface-container rounded-full">New Release</span>
+</div>
+<div class="flex gap-2 mt-3">
+<button class="bg-muted-gold text-primary-container font-label-sm px-4 py-2 rounded-DEFAULT flex items-center gap-2 hover:bg-opacity-90">
+<span class="material-symbols-outlined text-sm">play_arrow</span> Play
+                                </button>
+<button class="border border-outline-variant/40 text-on-surface hover:bg-surface-container-high transition-colors font-label-sm px-4 py-2 rounded-DEFAULT flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">favorite_border</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Feed Item 2 -->
+<div class="flex gap-4 items-start group">
+<img alt="Mix cover" class="w-24 h-24 object-cover rounded-lg ghost-border" data-alt="A close up, cinematic shot of a vinyl record spinning on a high-end turntable, shallow depth of field, warm, moody lighting reflecting off the dark metallic tonearm. Modern Heritage visual language." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA88ynt7Q_eKgUIwuJi-BBiskuMgStfcKaBpcjt5gt4Ye87YjabeByiosiGPkJ_mfeEAIJ4-__QHD4UzosMEGte4fWYGtHvq3YhQgFm4GVOP0CDt0cdwdMy589h5PVfwwVfVvtvjIBgcpkgXN1h6niZ76gmd-gF6usMYbUS_noRv2MtJra6A9TOOC-ZAlTcCP4G2Z5ULE6wSJY6r-0JNLuybeoBgWU6MO9iydCZkbHXsdQFrOZgsQ2t"/>
+<div class="flex-grow">
+<div class="flex justify-between items-start mb-1">
+<div>
+<h3 class="font-body-lg font-semibold text-on-surface group-hover:text-muted-gold transition-colors cursor-pointer">Midnight Sessions Vol 4.</h3>
+<p class="text-on-surface-variant font-body-md">by <span class="text-on-surface cursor-pointer hover:underline">DJ Kael</span></p>
+</div>
+<span class="text-label-sm text-outline px-2 py-1 bg-surface-container rounded-full">Exclusive Mix</span>
+</div>
+<div class="flex gap-2 mt-3">
+<button class="bg-muted-gold text-primary-container font-label-sm px-4 py-2 rounded-DEFAULT flex items-center gap-2 hover:bg-opacity-90">
+<span class="material-symbols-outlined text-sm">play_arrow</span> Play
+                                </button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Column Stack -->
+<div class="md:col-span-4 flex flex-col gap-stack-md">
+<!-- Request Song Module -->
+<section class="bg-gradient-to-br from-[#1A1A1A] to-[#0D0D0D] ghost-border rounded-xl p-6 relative overflow-hidden group cursor-pointer">
+<div class="absolute inset-0 bg-muted-gold opacity-0 group-hover:opacity-5 transition-opacity duration-300"></div>
+<div class="flex justify-between items-center mb-4 relative z-10">
+<h2 class="font-headline-md text-on-surface">Request Song</h2>
+<span class="material-symbols-outlined text-muted-gold">campaign</span>
+</div>
+<p class="text-on-surface-variant font-body-md mb-6 relative z-10">Commission a custom beat or request a specific remix from creators.</p>
+<button class="w-full border border-safari-clay text-safari-clay hover:bg-safari-clay hover:text-on-background transition-colors font-label-sm py-3 rounded-DEFAULT relative z-10">Start Request</button>
+</section>
+<!-- Following / Subscriptions Compact -->
+<section class="bg-[#1A1A1A] ghost-border rounded-xl flex-grow flex flex-col">
+<div class="p-6 border-b border-outline-variant/20">
+<h2 class="font-headline-md text-on-surface">Following</h2>
+</div>
+<div class="p-4 flex flex-col gap-4">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-high border border-muted-gold p-0.5">
+<img alt="Artist avatar" class="w-full h-full rounded-full object-cover" data-alt="A small headshot portrait of a sophisticated classical-crossover musician holding a violin, deep contrasting shadows, warm ambient light, high-end editorial aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAteFODceZ6UIQptpy7bLGIJ4IEF2GC77a_Yr_Z-_pf_rCqpo-cU-cYq24zXTpr1t7LslqjdTjiNu3oVvYU7Uau0hmGQjr3Lor8PW2AnCty5gjTao4i-wAWKsxoYnTbJL-2d6H2UIiv5TKs9GYcCWfR7-b6BZE783hFJzMy0l-juoNRo8aMHyV9UJjUKm-JkO_V8_BlMQXMlDrzF80DKPBbAGV50gVaFm54o6mHqdc6uINbLZbb2AKo"/>
+</div>
+<div>
+<p class="font-body-md font-semibold text-on-surface">Elena Rostova</p>
+<p class="text-label-sm text-safari-clay">Fan Club Active</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant cursor-pointer hover:text-on-surface">more_vert</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-high ghost-border p-0.5">
+<img alt="Artist avatar" class="w-full h-full rounded-full object-cover" data-alt="A small headshot portrait of an urban hip hop producer wearing dark sunglasses in a neon-lit studio, high contrast, desaturated colors with a pop of cyan, Modern Heritage style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB-4_rhYzr2nOKw_BS5amw6UWMHmzEe9VLbqYimwhTwe-9V8bwuzDh_hiUE7c1Q49pmbBFhSyak33K5gkA7-CP3U49HMnrbhnI2E8hACB5OaB14AXM9MlNIPxbNQ910iCmrXYevF_zOdKHreFTVdaZtojhY4NKG3TT_9Zk6NEzXAV2StUv-RN1b6g3oTr4mxLlGUSAgHY3GJRPZQaiWZxuZYxFwYAmUqpeJdoPukDcVjtN9Z0LiBJHY"/>
+</div>
+<div>
+<p class="font-body-md font-semibold text-on-surface">Marcus T.</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant cursor-pointer hover:text-on-surface">more_vert</span>
+</div>
+</div>
+<div class="mt-auto p-4 border-t border-outline-variant/10 text-center">
+<a class="text-muted-gold font-label-sm hover:underline" href="#">View All Subscriptions</a>
+</div>
+</section>
+</div>
+<!-- Tip History (Full Width Row) -->
+<section class="md:col-span-12 bg-[#1A1A1A] ghost-border rounded-xl p-6">
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-headline-md text-on-surface">Tip History</h2>
+<a class="text-outline hover:text-on-surface font-label-sm flex items-center gap-1 transition-colors" href="#">See Ledger <span class="material-symbols-outlined text-sm">arrow_forward</span></a>
+</div>
+<div class="flex flex-col">
+<!-- Header Row -->
+<div class="grid grid-cols-4 pb-2 border-b border-outline-variant/20 text-label-sm text-outline uppercase tracking-widest">
+<div class="col-span-2">Recipient</div>
+<div>Date</div>
+<div class="text-right">Amount</div>
+</div>
+<!-- Data Rows -->
+<div class="grid grid-cols-4 py-4 border-b border-outline-variant/10 items-center hover:bg-surface-container-low transition-colors px-2 -mx-2 rounded-lg cursor-pointer">
+<div class="col-span-2 flex items-center gap-3">
+<span class="material-symbols-outlined text-muted-gold">volunteer_activism</span>
+<span class="font-body-md text-on-surface">Soma</span>
+</div>
+<div class="text-on-surface-variant font-body-md">Oct 24, 2023</div>
+<div class="text-right text-muted-gold font-body-md font-semibold">$50.00</div>
+</div>
+<div class="grid grid-cols-4 py-4 border-b border-outline-variant/10 items-center hover:bg-surface-container-low transition-colors px-2 -mx-2 rounded-lg cursor-pointer">
+<div class="col-span-2 flex items-center gap-3">
+<span class="material-symbols-outlined text-outline-variant">volunteer_activism</span>
+<span class="font-body-md text-on-surface">DJ Kael</span>
+</div>
+<div class="text-on-surface-variant font-body-md">Oct 12, 2023</div>
+<div class="text-right text-on-surface font-body-md">$15.00</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="fixed bottom-0 w-full z-50 lg:hidden rounded-t-xl bg-background/90 backdrop-blur-2xl border-t border-outline-variant/30 shadow-[0_-4px_20px_rgba(178,0,232,0.15)] flex justify-around items-center h-20 pb-safe px-4">
+<a class="flex flex-col items-center justify-center text-primary-container drop-shadow-[0_0_8px_rgba(255,215,0,0.5)] transition-all duration-300 scale-110 active:scale-90 active:bg-surface-container rounded-lg p-2" href="#">
+<span class="material-symbols-outlined font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-label-sm mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-all duration-300 active:scale-90 active:bg-surface-container rounded-lg p-2 hover:text-on-surface" href="#">
+<span class="material-symbols-outlined">search</span>
+<span class="font-label-sm mt-1">Explore</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-all duration-300 active:scale-90 active:bg-surface-container rounded-lg p-2 hover:text-on-surface" href="#">
+<span class="material-symbols-outlined">add_circle</span>
+<span class="font-label-sm mt-1">Create</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-all duration-300 active:scale-90 active:bg-surface-container rounded-lg p-2 hover:text-on-surface" href="#">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-label-sm mt-1">Wallet</span>
+</a>
+</nav>
+</body></html>

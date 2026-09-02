@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Keyboard Handling Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .container {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .chat-interface {
+      position: relative;
+      width: 100%;
+      max-width: 400px;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      transition: padding-bottom 0.3s ease;
+    }
+
+    .header {
+      padding: 1rem;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+      background: rgba(102, 126, 234, 0.1);
+    }
+
+    .header h1 {
+      font-size: 1.25rem;
+      color: #333;
+      margin-bottom: 0.25rem;
+    }
+
+    .header p {
+      font-size: 0.875rem;
+      color: #666;
+    }
+
+    .info-panel {
+      padding: 1rem;
+      background: rgba(255, 200, 0, 0.1);
+      border-bottom: 1px solid rgba(255, 200, 0, 0.3);
+    }
+
+    .info-panel p {
+      font-size: 0.875rem;
+      color: #856404;
+      margin-bottom: 0.5rem;
+    }
+
+    .info-value {
+      font-weight: 600;
+      color: #667eea;
+    }
+
+    .messages {
+      flex: 1;
+      padding: 1rem;
+      overflow-y: auto;
+    }
+
+    .message {
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+      background: rgba(102, 126, 234, 0.1);
+      border-radius: 8px;
+    }
+
+    .input-area {
+      padding: 1rem;
+      border-top: 1px solid rgba(0, 0, 0, 0.1);
+      background: white;
+    }
+
+    .input-wrapper {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    input {
+      flex: 1;
+      padding: 0.75rem;
+      border: 2px solid rgba(102, 126, 234, 0.3);
+      border-radius: 8px;
+      font-size: 1rem;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: #667eea;
+    }
+
+    button {
+      padding: 0.75rem 1.5rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .status {
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      color: #666;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="chat-interface" id="chatInterface">
+      <div class="header">
+        <h1>🎹 Virtual Keyboard Demo</h1>
+        <p>Testing Task 13.3 Implementation</p>
+      </div>
+
+      <div class="info-panel">
+        <p>📱 <strong>Status:</strong> <span id="status" class="info-value">Waiting...</span></p>
+        <p>📏 <strong>Window Height:</strong> <span id="windowHeight" class="info-value">-</span>px</p>
+        <p>👁️ <strong>Viewport Height:</strong> <span id="viewportHeight" class="info-value">-</span>px</p>
+        <p>⌨️ <strong>Keyboard Height:</strong> <span id="keyboardHeight" class="info-value">0</span>px</p>
+        <p>📦 <strong>Padding Applied:</strong> <span id="paddingApplied" class="info-value">0</span>px</p>
+      </div>
+
+      <div class="messages">
+        <div class="message">
+          <strong>Instructions:</strong>
+          <ol style="margin-top: 0.5rem; margin-left: 1.5rem;">
+            <li>Tap on the input field below</li>
+            <li>Watch the keyboard slide up</li>
+            <li>Notice the padding adjustment keeps the input visible</li>
+            <li>The info panel shows real-time metrics</li>
+          </ol>
+        </div>
+        <div class="message">
+          <strong>Expected Behavior:</strong>
+          <ul style="margin-top: 0.5rem; margin-left: 1.5rem;">
+            <li>✅ Input stays visible above keyboard</li>
+            <li>✅ Padding-bottom adjusts dynamically</li>
+            <li>✅ Smooth transition when keyboard opens/closes</li>
+            <li>✅ No content hidden behind keyboard</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <div class="input-wrapper">
+          <input 
+            type="text" 
+            placeholder="Tap here to open keyboard..." 
+            id="messageInput"
+          />
+          <button>Send</button>
+        </div>
+        <div class="status" id="statusMessage">
+          Waiting for keyboard to open...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // This demo replicates the exact logic from ChatInterface.tsx (lines 228-266)
+    const chatInterface = document.getElementById('chatInterface');
+    const statusEl = document.getElementById('status');
+    const windowHeightEl = document.getElementById('windowHeight');
+    const viewportHeightEl = document.getElementById('viewportHeight');
+    const keyboardHeightEl = document.getElementById('keyboardHeight');
+    const paddingAppliedEl = document.getElementById('paddingApplied');
+    const statusMessageEl = document.getElementById('statusMessage');
+
+    let keyboardHeight = 0;
+
+    function updateMetrics() {
+      // Check if visualViewport is supported
+      if (!window.visualViewport) {
+        statusEl.textContent = 'Not Supported';
+        statusEl.style.color = '#dc3545';
+        statusMessageEl.textContent = 'visualViewport API not supported in this browser';
+        return;
+      }
+
+      // Calculate keyboard height (exact same logic as ChatInterface.tsx)
+      const windowHeight = window.innerHeight;
+      const viewportHeight = window.visualViewport.height;
+      const calculatedKeyboardHeight = windowHeight - viewportHeight;
+
+      // Update display
+      windowHeightEl.textContent = windowHeight;
+      viewportHeightEl.textContent = viewportHeight;
+      keyboardHeightEl.textContent = calculatedKeyboardHeight;
+
+      // Apply 150px threshold (same as implementation)
+      if (calculatedKeyboardHeight > 150) {
+        keyboardHeight = calculatedKeyboardHeight;
+        statusEl.textContent = 'Keyboard Open';
+        statusEl.style.color = '#28a745';
+        statusMessageEl.textContent = `✅ Keyboard detected! Padding adjusted to ${keyboardHeight}px`;
+      } else {
+        keyboardHeight = 0;
+        statusEl.textContent = 'Keyboard Closed';
+        statusEl.style.color = '#667eea';
+        statusMessageEl.textContent = 'Waiting for keyboard to open...';
+      }
+
+      // Apply padding to chat interface (same as implementation)
+      chatInterface.style.paddingBottom = keyboardHeight > 0 ? `${keyboardHeight}px` : '0px';
+      paddingAppliedEl.textContent = keyboardHeight;
+    }
+
+    // Check if visualViewport is supported
+    if (window.visualViewport) {
+      // Add event listeners (same as implementation)
+      window.visualViewport.addEventListener('resize', updateMetrics);
+      window.visualViewport.addEventListener('scroll', updateMetrics);
+
+      // Initial check
+      updateMetrics();
+
+      // Also update on initial load
+      window.addEventListener('load', updateMetrics);
+    } else {
+      statusEl.textContent = 'Not Supported';
+      statusEl.style.color = '#dc3545';
+      statusMessageEl.innerHTML = '⚠️ <strong>visualViewport API not supported</strong><br>Please test on a modern mobile browser (iOS Safari 13+, Chrome Mobile 61+)';
+    }
+
+    // Focus input when tapped
+    document.getElementById('messageInput').addEventListener('focus', () => {
+      setTimeout(updateMetrics, 300); // Allow time for keyboard to animate
+    });
+
+    document.getElementById('messageInput').addEventListener('blur', () => {
+      setTimeout(updateMetrics, 300); // Allow time for keyboard to animate
+    });
+  </script>
+</body>
+</html>

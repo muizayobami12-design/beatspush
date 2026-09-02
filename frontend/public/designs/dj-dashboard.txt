@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>BeatsPush - DJ Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Playfair+Display:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-container": "#342800",
+                        "outline": "#8e9192",
+                        "on-background": "#e5e2e1",
+                        "secondary-fixed-dim": "#e9c349",
+                        "surface-dim": "#141313",
+                        "tertiary-fixed-dim": "#f4bb92",
+                        "outline-variant": "#444748",
+                        "background": "#141313",
+                        "on-error": "#690005",
+                        "surface-container-highest": "#353434",
+                        "tertiary-container": "#1a0800",
+                        "surface": "#141313",
+                        "on-secondary-fixed-variant": "#574500",
+                        "secondary-container": "#af8d11",
+                        "error": "#ffb4ab",
+                        "on-error-container": "#ffdad6",
+                        "on-primary": "#313030",
+                        "on-tertiary": "#4a280a",
+                        "error-container": "#93000a",
+                        "surface-container-high": "#2b2a2a",
+                        "surface-tint": "#c9c6c5",
+                        "on-secondary": "#3c2f00",
+                        "tertiary-fixed": "#ffdcc5",
+                        "on-primary-fixed-variant": "#474646",
+                        "tertiary": "#f4bb92",
+                        "on-surface-variant": "#c4c7c7",
+                        "primary-fixed": "#e5e2e1",
+                        "on-tertiary-container": "#a0704d",
+                        "on-primary-fixed": "#1c1b1b",
+                        "primary": "#c9c6c5",
+                        "surface-container": "#201f1f",
+                        "primary-fixed-dim": "#c9c6c5",
+                        "inverse-on-surface": "#313030",
+                        "surface-bright": "#3a3939",
+                        "on-tertiary-fixed": "#301400",
+                        "inverse-surface": "#e5e2e1",
+                        "on-tertiary-fixed-variant": "#653d1e",
+                        "secondary-fixed": "#ffe088",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-secondary-fixed": "#241a00",
+                        "on-surface": "#e5e2e1",
+                        "on-primary-container": "#7c7a7a",
+                        "surface-container-low": "#1c1b1b",
+                        "secondary": "#e9c349",
+                        "inverse-primary": "#5f5e5e",
+                        "surface-variant": "#353434",
+                        "primary-container": "#0d0d0d",
+                        "muted-gold": "#D4AF37",
+                        "safari-clay": "#8B5E3C",
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "margin-desktop": "64px",
+                        "container-max": "1280px",
+                        "unit": "8px",
+                        "stack-sm": "12px",
+                        "stack-md": "24px",
+                        "margin-mobile": "20px",
+                        "stack-lg": "48px",
+                        "sidebar-width": "280px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Playfair Display"],
+                        "label-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Playfair Display"],
+                        "headline-md": ["Playfair Display"],
+                        "headline-lg": ["Playfair Display"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["32px", { "lineHeight": "40px", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "display-lg": ["64px", { "lineHeight": "72px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["28px", { "lineHeight": "36px", "fontWeight": "500" }],
+                        "headline-lg": ["40px", { "lineHeight": "48px", "fontWeight": "600" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #141313;
+            color: #e5e2e1;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .ghost-border {
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .glass-panel {
+            background: rgba(20, 19, 19, 0.6);
+            backdrop-filter: blur(12px);
+        }
+        .text-muted-gold {
+            color: #D4AF37;
+        }
+        .bg-muted-gold {
+            background-color: #D4AF37;
+        }
+        .border-safari-clay {
+            border-color: #8B5E3C;
+        }
+        .text-safari-clay {
+            color: #8B5E3C;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen font-body-md text-body-md relative overflow-x-hidden">
+<!-- TopNavBar (Mobile/Tablet) -->
+<nav class="bg-background/80 backdrop-blur-xl border-b border-outline-variant/20 shadow-[0_0_15px_rgba(255,246,223,0.1)] fixed top-0 w-full z-50 lg:hidden">
+<div class="flex justify-between items-center h-16 px-gutter w-full">
+<!-- Search Bar on Left (Placeholder icon) -->
+<button aria-label="Search" class="text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</button>
+<div class="font-display-lg text-headline-lg-mobile font-bold text-primary-container tracking-tighter" style="color: #c9c6c5;">
+                BeatsPush
+            </div>
+<div class="flex gap-4">
+<button aria-label="Notifications" class="text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button aria-label="Settings" class="text-on-surface-variant hover:text-primary transition-colors cursor-pointer active:scale-95 transition-transform">
+<img alt="User profile" class="w-8 h-8 rounded-full object-cover ghost-border" data-alt="A small circular avatar of a stylish DJ wearing headphones in a dimly lit studio environment. High contrast cinematic lighting with muted gold accents. The mood is professional and focused." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA3_HCRmdWE5mzLdLjnr_iHDe_rBoRW3Rt5OjPJsrF8L3pKAJmGbCA_jDKunj-von0AwJ3FLMv7LTwO_utYx8Bz51wnq5pnjhBWTqrYRbDCE1B18WdxeHmub8giOCLS5-2XFoTSXH1a2Q64Wnwolayokam9PXnLEt-NN7247SSGPeBHFbA0JEPNtpjG5QoQaQ4D8YkHNWeXP881e3ycHH_5uk-VTAAgML-vmNbYfcjjBA0Ce5wiPKjB"/>
+</button>
+</div>
+</div>
+</nav>
+<!-- SideNavBar (Desktop) -->
+<aside class="bg-surface-container-lowest fixed left-0 top-0 h-full w-sidebar-width hidden lg:flex flex-col border-r border-outline-variant/10 z-40">
+<div class="flex flex-col h-full py-stack-lg">
+<div class="px-6 mb-stack-lg flex items-center gap-4">
+<img alt="BeatsPush Logo" class="w-10 h-10 rounded-lg object-cover" data-alt="A minimalist logo mark for a fintech music platform, featuring a stylized gold record and geometric shapes on a dark background. High contrast, sharp edges, modern heritage aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5F5GCWQ0K_now1i83Dcw14rbaXvsN1S9S9WuTOJafCSm5NwpP4xEGxC1Fjrjv-2IfLb-CHvljeoRsTiuVOo9Fmr9zAWBDzXPFfYwgafQHyCDSXZA9nQjLjVUjE3BZvVswLZLu7jTDUbAAqJ84VGuNjujOC8g3YMslSGsGPeK4K2hliiAF0VgNG7vLO0OW2mnIJAw7dZKGvHo6zDyg6LkUlr-KgLZDXHdSizb9X-aYYELDzgJkyFSJ"/>
+<div>
+<h1 class="font-display-lg text-headline-md text-primary-container" style="color: #c9c6c5;">BeatsPush</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Creative Fintech</p>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-2">
+<!-- Active Item: Dashboard -->
+<a class="flex items-center gap-4 bg-secondary-container/20 text-primary-container border-l-4 border-primary-container py-3 px-6 hover:bg-surface-container-high transition-all duration-200 ease-in-out" href="#" style="color: #c9c6c5; border-color: #D4AF37;">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-body-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="storefront">storefront</span>
+<span class="font-body-md">Marketplace</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="library_music">library_music</span>
+<span class="font-body-md">My Library</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-body-md">Collaboration</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant hover:text-on-surface py-3 px-6 hover:bg-surface-container-high transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-body-md">Earnings</span>
+</a>
+</nav>
+<div class="px-6 mt-auto">
+<button class="w-full bg-muted-gold text-on-secondary-container font-label-sm text-label-sm uppercase py-3 rounded-DEFAULT hover:opacity-90 transition-opacity flex items-center justify-center gap-2 mb-stack-md">
+<span class="material-symbols-outlined" data-icon="upload">upload</span>
+                    Upload Beat
+                 </button>
+<div class="flex flex-col gap-2 border-t border-outline-variant/10 pt-4">
+<a class="flex items-center gap-4 text-on-surface-variant hover:text-on-surface py-2 px-2 hover:bg-surface-container-high transition-all duration-200 ease-in-out rounded-DEFAULT" href="#">
+<span class="material-symbols-outlined" data-icon="cached">cached</span>
+<span class="font-body-md">Switch Role</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant hover:text-on-surface py-2 px-2 hover:bg-surface-container-high transition-all duration-200 ease-in-out rounded-DEFAULT" href="#">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+<span class="font-body-md">Help</span>
+</a>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="lg:ml-[280px] pt-20 lg:pt-0 min-h-screen flex flex-col pb-24 lg:pb-0">
+<!-- Header Section -->
+<header class="px-margin-mobile lg:px-margin-desktop py-stack-md lg:py-stack-lg border-b border-outline-variant/10 bg-surface">
+<div class="max-w-container-max mx-auto flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<h2 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface mb-2">DJ Dashboard</h2>
+<p class="text-on-surface-variant font-body-lg">Manage your mixes, submissions, and earnings.</p>
+</div>
+<div class="flex gap-3">
+<button class="bg-surface-container text-on-surface font-label-sm text-label-sm uppercase py-2 px-4 rounded-DEFAULT ghost-border hover:bg-surface-container-high transition-colors">
+                        View Public Profile
+                    </button>
+<button class="bg-muted-gold text-on-secondary-container font-label-sm text-label-sm uppercase py-2 px-4 rounded-DEFAULT hover:opacity-90 transition-opacity">
+                        Create Mixtape
+                    </button>
+</div>
+</div>
+</header>
+<div class="flex-1 px-margin-mobile lg:px-margin-desktop py-stack-lg bg-background">
+<div class="max-w-container-max mx-auto grid grid-cols-1 lg:grid-cols-12 gap-stack-md">
+<!-- Left Column (Main Workflows) -->
+<div class="lg:col-span-8 flex flex-col gap-stack-lg">
+<!-- Mixtape Management Bento -->
+<section>
+<div class="flex items-center justify-between mb-stack-sm">
+<h3 class="font-headline-md text-headline-md text-on-surface">Mixtape Management</h3>
+<a class="text-muted-gold font-label-sm text-label-sm uppercase hover:underline" href="#">View All</a>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Card 1 -->
+<div class="bg-surface-container-low ghost-border rounded-lg overflow-hidden group relative">
+<div class="h-40 bg-surface-container-high relative">
+<img alt="Mix Cover" class="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity" data-alt="A cinematic, warm-toned photograph of a DJ controller in a high-end recording studio. The focus is on the intricate knobs and sliders. Subtle gold lighting reflections. 16:9 aspect ratio." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDw1kWFmqohQa5C3xfo-rdanovcYw6Jrf1e0OV_UyO9Sh9gT8lqJV48lGpd1f91_c0vluQA5XCDlaWULJ9jPpi9_Uxt2wrlxZPm0Nj_1JdQR2la8iUO3IVevy5b1Y6j8oAjTClpX2_ZMHHMYdS8F_aanGKkoAnKWsgLyW4JlU2i9KDhopl3B8XSJXlzHyjm-13OsmIitsdpKpGazg1WxUYkbAaSg3NVp5ek6PpfgPb0aoW_Z1UAiK9z"/>
+<div class="absolute top-2 right-2 bg-muted-gold text-on-secondary-container font-label-sm text-label-sm px-2 py-1 rounded-DEFAULT uppercase">Premium</div>
+</div>
+<div class="p-4">
+<h4 class="font-body-lg text-on-surface font-semibold mb-1 truncate">Midnight Voyage Vol. 4</h4>
+<p class="text-on-surface-variant text-sm mb-4">Deep House • 1h 20m</p>
+<div class="flex items-center justify-between">
+<span class="text-muted-gold font-body-md">$15.00</span>
+<div class="flex gap-2">
+<button class="p-2 text-on-surface-variant hover:text-muted-gold transition-colors"><span class="material-symbols-outlined text-[20px]" data-icon="edit">edit</span></button>
+<button class="p-2 text-on-surface-variant hover:text-muted-gold transition-colors"><span class="material-symbols-outlined text-[20px]" data-icon="bar_chart">bar_chart</span></button>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-low ghost-border rounded-lg overflow-hidden group relative">
+<div class="h-40 bg-surface-container-high relative">
+<img alt="Mix Cover" class="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity" data-alt="A moody, atmospheric shot of a crowd at a luxury underground club, silhouettes against amber stage lights. High contrast, cinematic editorial style. 16:9 aspect ratio." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmsdZjcSAm4hw-693vRe6nG3SwfQSvnT-2ykogv0ZCikTdiHccg2Gm5mUnr64CcDldruSAerviQIO3TMh3F_uchCtGEIu3oYR9Xz-oN3ES-Bq5b-kmF92_Q5g-BxL799nvi-vX3eMMCgQS20RU6rSehQObn9kvyztd_RVlT4RY3QsNEfxyjFuEA7iZ60As0yik3bRJcDTju2nb4QLYSYGhEpLqZCL2vRwkjp8vR-6TI2qv5Ah8zH_A"/>
+<div class="absolute top-2 right-2 bg-surface text-on-surface font-label-sm text-label-sm px-2 py-1 rounded-DEFAULT uppercase ghost-border">Free</div>
+</div>
+<div class="p-4">
+<h4 class="font-body-lg text-on-surface font-semibold mb-1 truncate">Summer Anthems</h4>
+<p class="text-on-surface-variant text-sm mb-4">Afrobeat • 45m</p>
+<div class="flex items-center justify-between">
+<span class="text-on-surface-variant font-body-md">2.4k Plays</span>
+<div class="flex gap-2">
+<button class="p-2 text-on-surface-variant hover:text-muted-gold transition-colors"><span class="material-symbols-outlined text-[20px]" data-icon="edit">edit</span></button>
+<button class="p-2 text-on-surface-variant hover:text-muted-gold transition-colors"><span class="material-symbols-outlined text-[20px]" data-icon="bar_chart">bar_chart</span></button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Submissions Inbox (List format) -->
+<section class="bg-surface-container-lowest ghost-border rounded-lg p-stack-md">
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center gap-3">
+<h3 class="font-headline-md text-headline-md text-on-surface">Submissions Inbox</h3>
+<span class="bg-muted-gold text-on-secondary-container font-label-sm px-2 py-0.5 rounded-full">3 New</span>
+</div>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors"><span class="material-symbols-outlined" data-icon="filter_list">filter_list</span></button>
+</div>
+<div class="flex flex-col">
+<!-- List Item 1 -->
+<div class="flex items-center justify-between py-4 border-b border-outline-variant/10 group">
+<div class="flex items-center gap-4">
+<img alt="Artist" class="w-12 h-12 rounded-full object-cover ghost-border" data-alt="A portrait of an upcoming music artist in a dark studio setting. Moody lighting with subtle gold rims. Editorial style portrait." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqO7FE3reE_0M3p7m2OlM31R1jk1b0KVAbwQ6HJbB9jezLxjWDzIJcDP8BVj9JvJNaIoCV-qwanbt39XyDOJsw_cOmV0zTxbZk9NUDn_yZ0GtMCEK-z0wU6m9ukd-SSqhR15dYhrCQYe0mG82DH3APIdWMuDzwMQ1pT7jB4TM2cr-IbjKAcdF93snu1B4_FT5gkpWcys_tuZBQIVFOvtjMW7AQJPWjtuFO9lXewwS9Ucnml1QDMxNo"/>
+<div>
+<p class="font-body-md text-on-surface font-medium">Elevate - Original Mix</p>
+<p class="text-sm text-on-surface-variant">by YNXG • Amapiano</p>
+</div>
+</div>
+<div class="flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-muted-gold font-label-sm text-label-sm uppercase hover:underline">Review</button>
+<button class="text-error hover:text-error-container transition-colors"><span class="material-symbols-outlined text-[20px]" data-icon="close">close</span></button>
+</div>
+</div>
+<!-- List Item 2 -->
+<div class="flex items-center justify-between py-4 border-b border-outline-variant/10 group">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center ghost-border text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="music_note">music_note</span>
+</div>
+<div>
+<p class="font-body-md text-on-surface font-medium">Night Rider</p>
+<p class="text-sm text-on-surface-variant">by DJ K-Swiss • Tech House</p>
+</div>
+</div>
+<div class="flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="text-muted-gold font-label-sm text-label-sm uppercase hover:underline">Review</button>
+<button class="text-error hover:text-error-container transition-colors"><span class="material-symbols-outlined text-[20px]" data-icon="close">close</span></button>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Column (Analytics & Calendar) -->
+<div class="lg:col-span-4 flex flex-col gap-stack-md">
+<!-- Earnings Summary Card -->
+<div class="bg-surface-container-lowest ghost-border rounded-lg p-stack-md relative overflow-hidden">
+<div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(circle at 100% 0%, #D4AF37 0%, transparent 50%);"></div>
+<h3 class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-2">Total Earnings (This Month)</h3>
+<div class="font-display-lg text-[48px] text-on-surface mb-6">$4,250<span class="text-muted-gold text-lg ml-2">↑ 12%</span></div>
+<div class="space-y-4">
+<div class="flex justify-between items-center border-b border-outline-variant/10 pb-2">
+<span class="text-on-surface-variant">Mix Sales</span>
+<span class="text-on-surface font-medium">$3,100</span>
+</div>
+<div class="flex justify-between items-center border-b border-outline-variant/10 pb-2">
+<span class="text-on-surface-variant">Tips &amp; Donations</span>
+<span class="text-on-surface font-medium">$850</span>
+</div>
+<div class="flex justify-between items-center pb-2">
+<span class="text-on-surface-variant">Bookings Deposit</span>
+<span class="text-safari-clay font-medium">$300</span>
+</div>
+</div>
+<button class="w-full mt-6 bg-transparent border border-safari-clay text-safari-clay font-label-sm text-label-sm uppercase py-2 rounded-DEFAULT hover:bg-safari-clay/10 transition-colors">
+                             View Full Report
+                         </button>
+</div>
+<!-- Booking Calendar Mini -->
+<div class="bg-surface-container-lowest ghost-border rounded-lg p-stack-md">
+<div class="flex items-center justify-between mb-4">
+<h3 class="font-headline-md text-headline-md text-on-surface text-[22px]">Upcoming Gigs</h3>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors"><span class="material-symbols-outlined" data-icon="calendar_month">calendar_month</span></button>
+</div>
+<div class="space-y-3">
+<div class="flex gap-4 p-3 bg-surface-container-low rounded-DEFAULT ghost-border">
+<div class="flex flex-col items-center justify-center min-w-[50px] border-r border-outline-variant/20 pr-4">
+<span class="text-muted-gold font-label-sm uppercase">Oct</span>
+<span class="font-headline-md text-on-surface">24</span>
+</div>
+<div>
+<h4 class="font-body-md text-on-surface font-medium">Club Silencio</h4>
+<p class="text-sm text-on-surface-variant flex items-center gap-1 mt-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="location_on">location_on</span> Paris, FR
+                                    </p>
+</div>
+</div>
+<div class="flex gap-4 p-3 bg-surface-container-low rounded-DEFAULT ghost-border">
+<div class="flex flex-col items-center justify-center min-w-[50px] border-r border-outline-variant/20 pr-4">
+<span class="text-safari-clay font-label-sm uppercase">Nov</span>
+<span class="font-headline-md text-on-surface">02</span>
+</div>
+<div>
+<h4 class="font-body-md text-on-surface font-medium">Boiler Room Set</h4>
+<p class="text-sm text-on-surface-variant flex items-center gap-1 mt-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="location_on">location_on</span> London, UK
+                                    </p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Featured Artist Carousel Section -->
+<section class="max-w-container-max mx-auto mt-stack-lg border-t border-outline-variant/10 pt-stack-lg">
+<div class="flex items-center justify-between mb-stack-md">
+<h3 class="font-headline-md text-headline-md text-on-surface">Trending Collab Artists</h3>
+<div class="flex gap-2">
+<button class="w-8 h-8 rounded-full border border-outline-variant/20 flex items-center justify-center text-on-surface-variant hover:text-muted-gold hover:border-muted-gold transition-colors"><span class="material-symbols-outlined text-[18px]" data-icon="chevron_left">chevron_left</span></button>
+<button class="w-8 h-8 rounded-full border border-outline-variant/20 flex items-center justify-center text-on-surface-variant hover:text-muted-gold hover:border-muted-gold transition-colors"><span class="material-symbols-outlined text-[18px]" data-icon="chevron_right">chevron_right</span></button>
+</div>
+</div>
+<div class="flex gap-4 overflow-x-auto pb-4 snap-x hide-scrollbar">
+<!-- Artist Card 1 -->
+<div class="min-w-[200px] bg-surface-container-lowest ghost-border rounded-lg p-4 flex flex-col items-center text-center snap-start">
+<img alt="Artist" class="w-24 h-24 rounded-full object-cover mb-4 ghost-border" data-alt="A striking portrait of a female vocalist with avant-garde styling, bathed in soft, moody studio light against a dark charcoal background. High contrast, modern heritage vibe." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBD2qB3Qy-WsP_KdU0VIUP_EWLS06drj0WseY74L229m5ZB6XztbsW2LDanwX8oXf6dNYzBXN82iMgpwve2skAFdWtgeor3O63AMpOS7xp1ir2Co2eE56ty_imm9Iqu_DF_KctnHVDPEEp4cnsiZbFWqtCuFucWjlpV2cwyAG395m_OSBSv7EEAAJePMrF9TBjaY5z0i4dFTKKHvcTm799DMLZ_6kKbXJ_LqUHWUESXUlKVmLGsUDb0"/>
+<h4 class="font-body-md text-on-surface font-medium">Lumiere</h4>
+<p class="text-sm text-on-surface-variant mb-3">Vocalist</p>
+<button class="px-3 py-1 bg-surface-container text-on-surface font-label-sm text-label-sm uppercase rounded-full ghost-border hover:text-muted-gold transition-colors">Invite</button>
+</div>
+<!-- Artist Card 2 -->
+<div class="min-w-[200px] bg-surface-container-lowest ghost-border rounded-lg p-4 flex flex-col items-center text-center snap-start">
+<img alt="Artist" class="w-24 h-24 rounded-full object-cover mb-4 ghost-border" data-alt="A portrait of a male instrumentalist holding a brass instrument in a dimly lit, luxurious lounge setting. Rich cinematic colors, deep shadows, professional look." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB-pimt0E6UapzWv3BBHPQofHMWpavwTX48x8p27byaXQlDVVEy3fbV1Bd0FrNVDPuvSP0sox77EqBdzZWsAao2aH21ZK-gxSaqEbZ9gA5h1JbtQQTM_jvYYgBPOXnSsKSEzipXxId53dNzaTxESB0J6UTkAF1lVM8NudMgBCHKPmy3hGFTIX4puEsuTXugjYnqL7gTLvhveqaptAw24qSytW_YHYeqJVIHGoGFPx0LNKY7uGXRBbAo"/>
+<h4 class="font-body-md text-on-surface font-medium">Brass Tactics</h4>
+<p class="text-sm text-on-surface-variant mb-3">Instrumentalist</p>
+<button class="px-3 py-1 bg-surface-container text-on-surface font-label-sm text-label-sm uppercase rounded-full ghost-border hover:text-muted-gold transition-colors">Invite</button>
+</div>
+<!-- Artist Card 3 -->
+<div class="min-w-[200px] bg-surface-container-lowest ghost-border rounded-lg p-4 flex flex-col items-center text-center snap-start">
+<div class="w-24 h-24 rounded-full bg-surface-container-high flex items-center justify-center mb-4 ghost-border text-on-surface-variant">
+<span class="material-symbols-outlined text-[32px]" data-icon="person">person</span>
+</div>
+<h4 class="font-body-md text-on-surface font-medium">Kizo Beat</h4>
+<p class="text-sm text-on-surface-variant mb-3">Producer</p>
+<button class="px-3 py-1 bg-surface-container text-on-surface font-label-sm text-label-sm uppercase rounded-full ghost-border hover:text-muted-gold transition-colors">Invite</button>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="bg-background/90 backdrop-blur-2xl border-t border-outline-variant/30 shadow-[0_-4px_20px_rgba(178,0,232,0.15)] fixed bottom-0 w-full z-50 lg:hidden rounded-t-xl">
+<div class="flex justify-around items-center h-20 pb-safe px-4">
+<button aria-label="Home" class="flex flex-col items-center justify-center text-primary-container drop-shadow-[0_0_8px_rgba(255,215,0,0.5)] active:bg-surface-container transition-all duration-300 scale-110 active:scale-90" style="color: #c9c6c5;">
+<span class="material-symbols-outlined" data-icon="home" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-label-sm text-label-sm mt-1">Home</span>
+</button>
+<button aria-label="Explore" class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-container transition-all duration-300 active:scale-90">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+<span class="font-label-sm text-label-sm mt-1">Explore</span>
+</button>
+<button aria-label="Create" class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-container transition-all duration-300 active:scale-90">
+<span class="material-symbols-outlined" data-icon="add_circle">add_circle</span>
+<span class="font-label-sm text-label-sm mt-1">Create</span>
+</button>
+<button aria-label="Wallet" class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-container transition-all duration-300 active:scale-90">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-label-sm text-label-sm mt-1">Wallet</span>
+</button>
+</div>
+</nav>
+<style>
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</body></html>

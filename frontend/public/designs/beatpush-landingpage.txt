@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>BeatsPush - Modern Heritage</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#c9c6c5",
+                        "secondary": "#e9c349",
+                        "on-tertiary": "#4a280a",
+                        "on-secondary-fixed": "#241a00",
+                        "on-primary-fixed-variant": "#474646",
+                        "primary": "#c9c6c5",
+                        "surface-bright": "#3a3939",
+                        "error-container": "#93000a",
+                        "surface-container-lowest": "#0e0e0e",
+                        "secondary-fixed": "#ffe088",
+                        "on-primary": "#313030",
+                        "background": "#141313",
+                        "on-tertiary-fixed-variant": "#653d1e",
+                        "on-secondary": "#3c2f00",
+                        "surface-container": "#201f1f",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary-container": "#342800",
+                        "outline-variant": "#444748",
+                        "surface-variant": "#353434",
+                        "on-background": "#e5e2e1",
+                        "inverse-surface": "#e5e2e1",
+                        "inverse-primary": "#5f5e5e",
+                        "surface": "#141313",
+                        "on-error": "#690005",
+                        "outline": "#8e9192",
+                        "on-secondary-fixed-variant": "#574500",
+                        "tertiary-fixed": "#ffdcc5",
+                        "tertiary-container": "#1a0800",
+                        "surface-container-highest": "#353434",
+                        "on-surface-variant": "#c4c7c7",
+                        "primary-fixed-dim": "#c9c6c5",
+                        "on-tertiary-fixed": "#301400",
+                        "secondary-fixed-dim": "#e9c349",
+                        "surface-dim": "#141313",
+                        "error": "#ffb4ab",
+                        "surface-container-high": "#2b2a2a",
+                        "tertiary-fixed-dim": "#f4bb92",
+                        "secondary-container": "#af8d11",
+                        "on-surface": "#e5e2e1",
+                        "on-primary-container": "#7c7a7a",
+                        "primary-container": "#0d0d0d",
+                        "surface-container-low": "#1c1b1b",
+                        "on-tertiary-container": "#a0704d",
+                        "on-primary-fixed": "#1c1b1b",
+                        "primary-fixed": "#e5e2e1",
+                        "tertiary": "#f4bb92",
+                        "inverse-on-surface": "#313030"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "unit": "8px",
+                        "margin-mobile": "20px",
+                        "gutter": "24px",
+                        "stack-lg": "48px",
+                        "stack-sm": "12px",
+                        "container-max": "1280px",
+                        "margin-desktop": "64px",
+                        "stack-md": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Playfair Display"],
+                        "label-sm": ["Inter"],
+                        "headline-lg": ["Playfair Display"],
+                        "display-lg": ["Playfair Display"],
+                        "headline-md": ["Playfair Display"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .ghost-border {
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .text-shadow-subtle {
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen font-body-md selection:bg-secondary selection:text-on-secondary">
+<!-- Navigation -->
+<nav class="fixed top-0 w-full z-50 bg-surface-container-low border-b border-outline-variant/15 transition-all duration-300" id="navbar">
+<div class="flex justify-between items-center px-margin-desktop w-full max-w-container-max mx-auto h-16 max-md:px-margin-mobile">
+<div class="flex items-center gap-2">
+<img alt="BeatsPush Logo" class="h-8 w-8 object-contain rounded" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDhOXqMqHqE6RIDcFwp4_Enowdn_bt7x2UHKGBv2KDdTYcWlHJOTvvGrJ7tqCogX-JXB4J-bpppHXMNqEWUyU3GFtPTADEBhwrnTb7sbFmsi5HioZpMb8Yb3itbydp6hGstH8RtIK94s0DgYE0SDCiIOfXlV0X1Bj7WANWXuRlGb0woEKmYCIFfANHGLg3qgOvcUkpZZac5DBN6BGukcttv-NhbY_D0s5r6aft1F8eJ4Ys3smF6l_6A"/>
+<span class="font-headline-md text-headline-md font-bold text-secondary tracking-tight">Amani</span>
+</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-secondary font-bold border-b-2 border-secondary pb-1 text-label-sm font-label-sm tracking-wider uppercase transition-colors" href="#">Discover</a>
+<a class="text-on-surface-variant font-medium hover:text-secondary transition-colors duration-200 text-label-sm font-label-sm tracking-wider uppercase" href="#">Royalties</a>
+<a class="text-on-surface-variant font-medium hover:text-secondary transition-colors duration-200 text-label-sm font-label-sm tracking-wider uppercase" href="#">Marketplace</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-secondary transition-colors active:opacity-80">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-secondary transition-colors active:opacity-80">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="h-8 w-8 rounded-full bg-surface-variant border border-outline-variant/30 overflow-hidden cursor-pointer hover:border-secondary transition-colors">
+<img alt="User profile photo" class="w-full h-full object-cover" data-alt="A close-up portrait of a stylish Black professional in a dark, warm-lit environment, representing a user profile photo. The lighting is cinematic, highlighting elegant features. The aesthetic is modern heritage, high contrast, and editorial." src="https://lh3.googleusercontent.com/aida-public/AB6AXuADuPsUi56ETYAtTXFAuFPuHFMC97ImgvBV8NMx9mcYgPXhxpl_myPArQJpXNlWXJjh3rqOv7-zK41FVvzu0JhLRIoVUJTn08zSip6Qv6dW6yQHQzVykLziA5CPwSCO3_qYuMu28xEKjJfnsiKLacJGcNz1_w6FKHeR4DBH8x8G9kPtfrHQiEkPnI38H2kvFox6qN8H1H7aJyUKbfrUgx1O1JsxhFzQarOXdJDI1cfVqMdY-GNcTUDL"/>
+</div>
+</div>
+</div>
+</nav>
+<!-- Hero Section -->
+<header class="relative w-full h-[90vh] min-h-[600px] flex items-center justify-center overflow-hidden">
+<div class="absolute inset-0 z-0">
+<img alt="Artist in studio" class="w-full h-full object-cover opacity-60" data-alt="Cinematic, wide-angle photography of a confident Pan-African music artist standing in a state-of-the-art, naturally lit recording studio. Warm sunlight streams through large windows, casting deep, dramatic shadows. The studio features high-end analog gear and rich wood textures. The aesthetic is luxury, Modern Heritage, with deep blacks and rich golden highlights." src="https://lh3.googleusercontent.com/aida-public/AB6AXuACkgNpDG-6As6eSaA0UTeW7OLfzyeVGpyq5tqQxyakH2h8zKC6GA1NRZWhRSUjJUu1AE-zMmSDhc18-606nmQIDK021wMWLUgwsAHJfkBXQFtrDO79jo6Wvrw5ih3Wi__pV84vUlLwQbwjTfk4j8t41tO3Tt-vykz2yhP56PMpE0f6987kxwaK9OGKNRKp2EGHFrMta4GVVwSJWkqBnb4yCgSNNUwyy9PNQo8dueoBpu47l41xbuEs"/>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent"></div>
+<div class="absolute inset-0 bg-gradient-to-r from-background/90 via-background/40 to-transparent"></div>
+</div>
+<div class="relative z-10 w-full max-w-container-max mx-auto px-margin-desktop max-md:px-margin-mobile flex flex-col items-start gap-stack-md mt-16">
+<div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-low border border-outline-variant/30 backdrop-blur-sm">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-widest">Global Ecosystem</span>
+</div>
+<h1 class="font-display-lg text-display-lg max-w-3xl text-on-background text-shadow-subtle max-md:font-headline-lg-mobile max-md:text-headline-lg-mobile">
+                The Global Ecosystem for <span class="text-secondary italic font-serif">Pan-African</span> Creatives.
+            </h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-xl">
+                Bridge the gap between traditional excellence and global financial sophistication. Manage royalties, secure bookings, and build your heritage.
+            </p>
+<div class="flex items-center gap-4 mt-stack-sm pt-stack-sm border-t border-outline-variant/30">
+<button class="bg-secondary text-on-secondary-fixed font-label-sm text-label-sm px-6 py-3 rounded hover:bg-secondary-fixed transition-colors uppercase tracking-wider font-bold">
+                    Join the Network
+                </button>
+<button class="bg-transparent border border-[#8B5E3C] text-on-background font-label-sm text-label-sm px-6 py-3 rounded hover:bg-[#8B5E3C]/10 transition-colors uppercase tracking-wider">
+                    Explore Platform
+                </button>
+</div>
+</div>
+</header>
+<!-- Choose Your Path Section -->
+<section class="py-stack-lg bg-surface-container-lowest w-full relative">
+<div class="max-w-container-max mx-auto px-margin-desktop max-md:px-margin-mobile">
+<div class="mb-stack-lg flex flex-col items-center text-center">
+<h2 class="font-headline-lg text-headline-lg text-on-background max-md:font-headline-md max-md:text-headline-md mb-2">Choose Your Path</h2>
+<div class="w-12 h-1 bg-secondary rounded-full"></div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter">
+<!-- Artist Card -->
+<div class="group relative bg-surface-container ghost-border rounded-lg overflow-hidden transition-transform duration-300 hover:-translate-y-2 cursor-pointer flex flex-col h-[400px]">
+<div class="h-1/2 w-full relative overflow-hidden">
+<img alt="Artist Role" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-80 group-hover:opacity-100" data-alt="A striking portrait of an African vocalist holding a vintage microphone on stage. High-contrast, cinematic lighting with deep blacks and subtle warm golden rim light. The atmosphere is intense, intimate, and highly professional, reflecting a premium live performance." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDiCZTnRQ4kQ2ooek1CTqBxK6ymo9Xp711P4Jp976xfbUYR4ZqHD4WMobiuNjKPtDjEp7Pcj4YphdsuNZT1-w5cfPYKe1Vo850H48Bw4IrFFdJVYoiIkeLCed7yI45-wqALkbRxnYF9wgiH5JgjppbuWbvhfmj-CcWcrTYzWG0KcG6XzxIhScOBDgVoklL2IiCTs2W9NQTvbBwLcJpCzYUj0VnIqtJBbsX8R7_hkGrE3FRYxes05Qy1"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container to-transparent"></div>
+</div>
+<div class="p-6 flex flex-col flex-grow justify-between relative z-10 bg-surface-container">
+<div>
+<div class="flex items-center justify-between mb-2">
+<h3 class="font-headline-md text-headline-md text-secondary">Artist</h3>
+<span class="material-symbols-outlined text-secondary opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-1 duration-300">arrow_forward</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">Distribute music, track royalties, and connect with a global audience seamlessly.</p>
+</div>
+<div class="mt-4 flex gap-2">
+<span class="px-2 py-1 bg-[#8B5E3C] text-white text-[10px] rounded-full uppercase tracking-wider font-semibold">Distribution</span>
+<span class="px-2 py-1 bg-[#8B5E3C] text-white text-[10px] rounded-full uppercase tracking-wider font-semibold">Royalties</span>
+</div>
+</div>
+</div>
+<!-- Producer Card -->
+<div class="group relative bg-surface-container ghost-border rounded-lg overflow-hidden transition-transform duration-300 hover:-translate-y-2 cursor-pointer flex flex-col h-[400px]">
+<div class="h-1/2 w-full relative overflow-hidden">
+<img alt="Producer Role" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-80 group-hover:opacity-100" data-alt="Close up of a high-end mixing console in a modern, dark recording studio. Shallow depth of field focusing on the intricate knobs and sliders. The lighting is moody, with subtle golden reflections on the metallic surfaces. Premium, technical, and precise aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRP5Qa6hBJaWd6GIjy5oDjnVXaDHUejN1hxbx7rm7NIF2RzKi9MhxGv-AWVN1xmvKpbYGPWNpXwJ_OF4HrWGVXTNjLXdmLrwqNRu4FIIFktGYbTNiyzGylFhTpgl2rh-dXN4rwRo-CVTt3gOvGMCzt4Ao2etllCGhZg_RGYaM76GLjRP2T3it55pb76AqEtQPXsmeiXpRiVq7STOsA_2GNazNGGTpacv_Elu1I26V8H8_91eCSYTPi"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container to-transparent"></div>
+</div>
+<div class="p-6 flex flex-col flex-grow justify-between relative z-10 bg-surface-container">
+<div>
+<div class="flex items-center justify-between mb-2">
+<h3 class="font-headline-md text-headline-md text-secondary">Producer</h3>
+<span class="material-symbols-outlined text-secondary opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-1 duration-300">arrow_forward</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">Sell beats, manage split sheets, and build your professional catalog.</p>
+</div>
+<div class="mt-4 flex gap-2">
+<span class="px-2 py-1 bg-[#8B5E3C] text-white text-[10px] rounded-full uppercase tracking-wider font-semibold">Marketplace</span>
+<span class="px-2 py-1 bg-[#8B5E3C] text-white text-[10px] rounded-full uppercase tracking-wider font-semibold">Splits</span>
+</div>
+</div>
+</div>
+<!-- DJ Card -->
+<div class="group relative bg-surface-container ghost-border rounded-lg overflow-hidden transition-transform duration-300 hover:-translate-y-2 cursor-pointer flex flex-col h-[400px]">
+<div class="h-1/2 w-full relative overflow-hidden">
+<img alt="DJ Role" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-80 group-hover:opacity-100" data-alt="Abstract, dynamic shot of a DJ's hand adjusting a high-end turntable or controller in a dark club environment. The lighting features deep blacks contrasted with sharp, warm amber and gold accents. The mood is energetic yet refined and exclusive." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBWLgHWd6RagBT3-SWVp45lE9p_iicbVbJxo_PkOLs7-pbPVrLkL-BIiIE3spwVHs3f0aye8eN1PISKuA3hWfUgd-ILDdP1ivYofa9GkzM9t9xC3fCXrMzLb8i20o4dCPz6N1KNTvd22avA9-LD1S6IsvXu9_8Ds4UN21cgsKq2qRCKXSvMsQ2Am9pf8kkDKQGXbd4z2kYKQh6p_QqImAgrOsr7Td7rs2gKQP_YsnlCDPdqPptmz3zQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container to-transparent"></div>
+</div>
+<div class="p-6 flex flex-col flex-grow justify-between relative z-10 bg-surface-container">
+<div>
+<div class="flex items-center justify-between mb-2">
+<h3 class="font-headline-md text-headline-md text-secondary">DJ</h3>
+<span class="material-symbols-outlined text-secondary opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-1 duration-300">arrow_forward</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">Curate exclusive sets, manage bookings, and monetize your live performances.</p>
+</div>
+<div class="mt-4 flex gap-2">
+<span class="px-2 py-1 bg-[#8B5E3C] text-white text-[10px] rounded-full uppercase tracking-wider font-semibold">Bookings</span>
+<span class="px-2 py-1 bg-[#8B5E3C] text-white text-[10px] rounded-full uppercase tracking-wider font-semibold">Curation</span>
+</div>
+</div>
+</div>
+<!-- Fan Card -->
+<div class="group relative bg-surface-container ghost-border rounded-lg overflow-hidden transition-transform duration-300 hover:-translate-y-2 cursor-pointer flex flex-col h-[400px]">
+<div class="h-1/2 w-full relative overflow-hidden">
+<img alt="Fan Role" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-80 group-hover:opacity-100" data-alt="A sophisticated lifestyle shot of an individual listening to music on premium headphones in a minimalist, dimly lit, architecturally striking room. Deep charcoal tones and soft, warm ambient light create a mood of quiet luxury and intense musical appreciation." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJ5WCESovwIp9CA_BoDhTTso0rjb4FLLr3LVzBOCZRFWFwmPheCyNjE29nvT8JgS_3gMveNdUXk7X6Oh-QZyk9_NcV1dc24VDDr8EDMfxmTVrY3A6iz2PZYQW4MDF5MzalCQKtMFHC0Ntu1gLtK_F9GpLCErkmesCS0yrtv03kIvA05tsMtR3QZ-7qAHNCUNs_6HMRfLkpywXW4X3Zd12RJm3yfnoruObH0ctknEWl4nWWslBYIotj"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container to-transparent"></div>
+</div>
+<div class="p-6 flex flex-col flex-grow justify-between relative z-10 bg-surface-container">
+<div>
+<div class="flex items-center justify-between mb-2">
+<h3 class="font-headline-md text-headline-md text-secondary">Fan</h3>
+<span class="material-symbols-outlined text-secondary opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-1 duration-300">arrow_forward</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">Discover exclusive drops, invest in rising talent, and access VIP experiences.</p>
+</div>
+<div class="mt-4 flex gap-2">
+<span class="px-2 py-1 bg-[#8B5E3C] text-white text-[10px] rounded-full uppercase tracking-wider font-semibold">Discovery</span>
+<span class="px-2 py-1 bg-[#8B5E3C] text-white text-[10px] rounded-full uppercase tracking-wider font-semibold">Investment</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Footer -->
+<footer class="bg-surface border-t border-outline-variant/15 pt-stack-lg pb-stack-md">
+<div class="max-w-container-max mx-auto px-margin-desktop max-md:px-margin-mobile">
+<div class="flex flex-col md:flex-row justify-between items-start gap-stack-md border-b border-outline-variant/15 pb-stack-md mb-stack-md">
+<div class="max-w-sm">
+<div class="flex items-center gap-2 mb-4">
+<img alt="BeatsPush Logo" class="h-6 w-6 object-contain rounded opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDhOXqMqHqE6RIDcFwp4_Enowdn_bt7x2UHKGBv2KDdTYcWlHJOTvvGrJ7tqCogX-JXB4J-bpppHXMNqEWUyU3GFtPTADEBhwrnTb7sbFmsi5HioZpMb8Yb3itbydp6hGstH8RtIK94s0DgYE0SDCiIOfXlV0X1Bj7WANWXuRlGb0woEKmYCIFfANHGLg3qgOvcUkpZZac5DBN6BGukcttv-NhbY_D0s5r6aft1F8eJ4Ys3smF6l_6A"/>
+<span class="font-headline-md text-body-lg font-bold text-on-surface tracking-tight">Amani</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">The Modern Heritage standard for the global creative economy.</p>
+</div>
+<div class="grid grid-cols-2 gap-stack-lg">
+<div class="flex flex-col gap-2">
+<h4 class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-2">Platform</h4>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Discover</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Royalties</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Marketplace</a>
+</div>
+<div class="flex flex-col gap-2">
+<h4 class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-2">Legal</h4>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Terms of Service</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors" href="#">Privacy Policy</a>
+</div>
+</div>
+</div>
+<div class="flex justify-between items-center">
+<p class="font-body-md text-body-md text-on-surface-variant text-sm">© 2024 BeatsPush. All rights reserved.</p>
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-on-surface-variant hover:text-secondary cursor-pointer transition-colors">language</span>
+</div>
+</div>
+</div>
+</footer>
+<script>
+        // Simple navbar background transition on scroll
+        window.addEventListener('scroll', () => {
+            const nav = document.getElementById('navbar');
+            if (window.scrollY > 50) {
+                nav.classList.add('bg-surface-container-low/95', 'backdrop-blur-md');
+                nav.classList.remove('bg-surface-container-low');
+            } else {
+                nav.classList.remove('bg-surface-container-low/95', 'backdrop-blur-md');
+                nav.classList.add('bg-surface-container-low');
+            }
+        });
+    </script>
+</body></html>

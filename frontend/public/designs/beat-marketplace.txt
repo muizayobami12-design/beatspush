@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Beat Marketplace - Amani</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#c9c6c5",
+                        "secondary": "#e9c349",
+                        "on-tertiary": "#4a280a",
+                        "on-secondary-fixed": "#241a00",
+                        "on-primary-fixed-variant": "#474646",
+                        "primary": "#c9c6c5",
+                        "surface-bright": "#3a3939",
+                        "error-container": "#93000a",
+                        "surface-container-lowest": "#0e0e0e",
+                        "secondary-fixed": "#ffe088",
+                        "on-primary": "#313030",
+                        "background": "#141313",
+                        "on-tertiary-fixed-variant": "#653d1e",
+                        "on-secondary": "#3c2f00",
+                        "surface-container": "#201f1f",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary-container": "#342800",
+                        "outline-variant": "#444748",
+                        "surface-variant": "#353434",
+                        "on-background": "#e5e2e1",
+                        "inverse-surface": "#e5e2e1",
+                        "inverse-primary": "#5f5e5e",
+                        "surface": "#141313",
+                        "on-error": "#690005",
+                        "outline": "#8e9192",
+                        "on-secondary-fixed-variant": "#574500",
+                        "tertiary-fixed": "#ffdcc5",
+                        "tertiary-container": "#1a0800",
+                        "surface-container-highest": "#353434",
+                        "on-surface-variant": "#c4c7c7",
+                        "primary-fixed-dim": "#c9c6c5",
+                        "on-tertiary-fixed": "#301400",
+                        "secondary-fixed-dim": "#e9c349",
+                        "surface-dim": "#141313",
+                        "error": "#ffb4ab",
+                        "surface-container-high": "#2b2a2a",
+                        "tertiary-fixed-dim": "#f4bb92",
+                        "secondary-container": "#af8d11",
+                        "on-surface": "#e5e2e1",
+                        "on-primary-container": "#7c7a7a",
+                        "primary-container": "#0d0d0d",
+                        "surface-container-low": "#1c1b1b",
+                        "on-tertiary-container": "#a0704d",
+                        "on-primary-fixed": "#1c1b1b",
+                        "primary-fixed": "#e5e2e1",
+                        "tertiary": "#f4bb92",
+                        "inverse-on-surface": "#313030"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "unit": "8px",
+                        "margin-mobile": "20px",
+                        "gutter": "24px",
+                        "stack-lg": "48px",
+                        "stack-sm": "12px",
+                        "container-max": "1280px",
+                        "margin-desktop": "64px",
+                        "stack-md": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Playfair Display"],
+                        "label-sm": ["Inter"],
+                        "headline-lg": ["Playfair Display"],
+                        "display-lg": ["Playfair Display"],
+                        "headline-md": ["Playfair Display"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["32px", { "lineHeight": "40px", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-lg": ["40px", { "lineHeight": "48px", "fontWeight": "600" }],
+                        "display-lg": ["64px", { "lineHeight": "72px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["28px", { "lineHeight": "36px", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .ghost-border {
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .play-btn-hover:hover .play-icon {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .play-icon {
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md antialiased min-h-screen flex flex-col pb-24 md:pb-0">
+<!-- Top Navigation -->
+<nav class="bg-background dark:bg-background border-b border-outline-variant/15 fixed top-0 w-full z-50">
+<div class="flex justify-between items-center px-margin-mobile md:px-margin-desktop w-full max-w-container-max mx-auto h-16">
+<div class="flex items-center gap-stack-md">
+<img alt="Amani Logo" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDhOXqMqHqE6RIDcFwp4_Enowdn_bt7x2UHKGBv2KDdTYcWlHJOTvvGrJ7tqCogX-JXB4J-bpppHXMNqEWUyU3GFtPTADEBhwrnTb7sbFmsi5HioZpMb8Yb3itbydp6hGstH8RtIK94s0DgYE0SDCiIOfXlV0X1Bj7WANWXuRlGb0woEKmYCIFfANHGLg3qgOvcUkpZZac5DBN6BGukcttv-NhbY_D0s5r6aft1F8eJ4Ys3smF6l_6A"/>
+<span class="text-headline-md font-headline-md font-bold text-secondary dark:text-secondary hidden md:block">Amani</span>
+</div>
+<!-- Nav Links (Desktop) -->
+<div class="hidden md:flex items-center gap-stack-lg h-full">
+<a class="h-full flex items-center text-on-surface-variant dark:text-on-surface-variant font-medium hover:text-secondary transition-colors duration-200 cursor-pointer active:opacity-80" href="#">
+<span class="font-label-sm text-label-sm">Discover</span>
+</a>
+<a class="h-full flex items-center text-on-surface-variant dark:text-on-surface-variant font-medium hover:text-secondary transition-colors duration-200 cursor-pointer active:opacity-80" href="#">
+<span class="font-label-sm text-label-sm">Royalties</span>
+</a>
+<a class="h-full flex items-center text-secondary font-bold border-b-2 border-secondary hover:text-secondary transition-colors duration-200 cursor-pointer active:opacity-80" href="#">
+<span class="font-label-sm text-label-sm">Marketplace</span>
+</a>
+</div>
+<!-- Search (Right aligned on mobile) -->
+<div class="flex-1 md:flex-none flex justify-end md:justify-start mr-4 md:mr-0">
+<div class="relative w-full md:w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full bg-surface-container-low border-none rounded-full py-2 pl-10 pr-4 text-body-md font-body-md focus:ring-1 focus:ring-secondary text-on-surface placeholder:text-on-surface-variant/40 ghost-border" placeholder="Search beats, producers..." type="text"/>
+</div>
+</div>
+<div class="hidden md:flex items-center gap-stack-sm">
+<button class="p-2 text-on-surface-variant hover:text-secondary transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-secondary transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-container-high border border-outline-variant/30 ml-2 overflow-hidden cursor-pointer">
+<img class="w-full h-full object-cover" data-alt="A portrait of a confident music producer in a dimly lit studio setting. Warm amber and deep shadow lighting. Modern heritage aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBkO_pNYTecyjPXIVAUKzedQyDPCqEXRpfbwUD4DrCSOqLvKGosJ_wv50YJPeEANiUc75yeq0lZ0122RFZTsvUL5q3xkz8U2jRrCIgi1n-nWjyUq3MDmcw8cHrYcOf5_VKPYudqO3DmDG6jlJL_dDh1nv6ouvTQvuJPpsABn7QQjOuD5heFGEwOXRTybnLP7HV7VNCLBAyV6PuhIMuSxk29W6WhXsQWqvm8eP9170i8Fut2gWKuzsOq"/>
+</div>
+</div>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="flex-1 w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop pt-24 md:pt-32 flex flex-col md:flex-row gap-gutter">
+<!-- Sidebar Navigation (Desktop) -->
+<aside class="hidden md:flex flex-col h-[calc(100vh-8rem)] w-64 z-40 sticky top-32 border-r border-outline-variant/15 pr-stack-md">
+<div class="mb-stack-lg">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-2">Creator Hub</p>
+<h2 class="font-headline-md text-headline-md text-secondary">Switch Roles</h2>
+</div>
+<nav class="flex-1 space-y-2">
+<a class="flex items-center gap-4 text-on-surface-variant dark:text-on-surface-variant font-medium px-4 py-3 rounded-lg hover:bg-surface-variant/20 hover:text-secondary transition-all scale-95 active:scale-90 cursor-pointer" href="#">
+<span class="material-symbols-outlined">mic_external_on</span>
+<span class="font-body-md text-body-md">Artist</span>
+</a>
+<a class="flex items-center gap-4 text-secondary font-bold bg-surface-variant/10 rounded-lg px-4 py-3 transition-all scale-95 active:scale-90 cursor-pointer" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings_input_component</span>
+<span class="font-body-md text-body-md">Producer</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant dark:text-on-surface-variant font-medium px-4 py-3 rounded-lg hover:bg-surface-variant/20 hover:text-secondary transition-all scale-95 active:scale-90 cursor-pointer" href="#">
+<span class="material-symbols-outlined">headphones</span>
+<span class="font-body-md text-body-md">DJ</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant dark:text-on-surface-variant font-medium px-4 py-3 rounded-lg hover:bg-surface-variant/20 hover:text-secondary transition-all scale-95 active:scale-90 cursor-pointer" href="#">
+<span class="material-symbols-outlined">favorite</span>
+<span class="font-body-md text-body-md">Fan</span>
+</a>
+</nav>
+<div class="mt-auto pt-stack-md border-t border-outline-variant/15 space-y-2">
+<button class="w-full bg-secondary text-on-secondary font-label-sm text-label-sm py-3 px-4 rounded hover:opacity-90 transition-opacity mb-4">
+                    Go Pro
+                </button>
+<a class="flex items-center gap-4 text-on-surface-variant dark:text-on-surface-variant font-medium px-4 py-3 rounded-lg hover:bg-surface-variant/20 hover:text-secondary transition-all scale-95 active:scale-90 cursor-pointer" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-body-md text-body-md">Support</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant dark:text-on-surface-variant font-medium px-4 py-3 rounded-lg hover:bg-surface-variant/20 hover:text-secondary transition-all scale-95 active:scale-90 cursor-pointer" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-body-md text-body-md">Sign Out</span>
+</a>
+</div>
+</aside>
+<!-- Marketplace Canvas -->
+<section class="flex-1 pb-stack-lg">
+<!-- Header & Filters -->
+<div class="mb-stack-lg">
+<h1 class="font-display-lg text-display-lg text-on-surface mb-stack-sm md:hidden">Marketplace</h1>
+<div class="flex overflow-x-auto no-scrollbar gap-stack-sm pb-2">
+<button class="whitespace-nowrap px-4 py-2 rounded-full bg-secondary text-on-secondary font-label-sm text-label-sm transition-colors">
+                        All Genres
+                    </button>
+<button class="whitespace-nowrap px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/30 text-on-surface-variant hover:text-on-surface hover:border-secondary font-label-sm text-label-sm transition-colors">
+                        Afrobeats
+                    </button>
+<button class="whitespace-nowrap px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/30 text-on-surface-variant hover:text-on-surface hover:border-secondary font-label-sm text-label-sm transition-colors">
+                        Amapiano
+                    </button>
+<button class="whitespace-nowrap px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/30 text-on-surface-variant hover:text-on-surface hover:border-secondary font-label-sm text-label-sm transition-colors">
+                        Highlife
+                    </button>
+<button class="whitespace-nowrap px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/30 text-on-surface-variant hover:text-on-surface hover:border-secondary font-label-sm text-label-sm transition-colors">
+                        R&amp;B / Soul
+                    </button>
+</div>
+</div>
+<!-- Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+<!-- Featured Beat Card (Spans 2 cols on lg) -->
+<div class="lg:col-span-2 group relative rounded-xl overflow-hidden bg-surface-container-low ghost-border aspect-video lg:aspect-[2/1] cursor-pointer play-btn-hover flex flex-col justify-end p-stack-md">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" data-alt="A sweeping cinematic view of a vibrant Lagos cityscape at sunset, reflecting the energy of modern Afrobeats. Warm golden hour lighting, high contrast, luxurious and aspirational mood." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCSAZqfkymjCEWx9YZ1s--2a8wjW-r8r2g70G6Rh_F-b-vALWbHEtZ8mkapru5VVJj1uADwzVanaAJYOBwHfyqaE8nSZUtiK7Xl2vzJ1LhupW0W0ul47fNIpTXSnVSHuevbBWQAoA3FAaij0NtZbJw-FTALX2a7daOm9oqST7KdRaO9KbyKvg5HSZhVcRtQmCs_83zBYM5gqyBYUEwnVPwJypkQmZz5oed_lgs9RcO3FDykKR8p-rzg')">
+<div class="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent"></div>
+</div>
+<div class="relative z-10 flex justify-between items-end">
+<div>
+<span class="inline-block px-2 py-1 mb-2 bg-[#8B5E3C] text-white font-label-sm text-label-sm rounded-full tracking-wider">AFROBEATS</span>
+<h3 class="font-headline-lg font-headline-lg text-on-surface mb-1">Lagos Nights</h3>
+<p class="font-body-md text-on-surface-variant">Produced by Kel-P</p>
+</div>
+<div class="flex items-center gap-4">
+<span class="font-headline-md text-secondary">$500</span>
+<button class="w-12 h-12 rounded-full bg-secondary text-on-secondary flex items-center justify-center play-icon shadow-[0_0_20px_rgba(233,195,73,0.3)]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Standard Beat Card -->
+<div class="group relative rounded-xl overflow-hidden bg-surface-container-low ghost-border aspect-square cursor-pointer play-btn-hover flex flex-col justify-end p-stack-md">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" data-alt="Abstract macro photography of a vibrating speaker cone emitting golden dust particles. Moody, dark background with dramatic high-contrast side lighting. Luxurious sound aesthetic." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDkVaWX0Ie0QoYFAsMIy5DIjAsRvFnu26E7rkXDsw1Qu-uTt02pNMWQx8edm4GrbAYcmGWLTgtbLeA9QMaC1CcFiGATSIY6WoZPJn6vbWuxa6H3ZueMAAA9f45YiS08hhjHIBvKAUzezFHT-Jr_2BDlS-qcryAFqnzYqalnEXuiII4BGJu4tRPvlBdCggXlUIfkENhIQ7uEtlMSeLn93orMZ-j7j1B1n6ZNuHMERFen_FDj0047uaxA')">
+<div class="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent"></div>
+</div>
+<div class="relative z-10">
+<div class="flex justify-between items-start mb-auto">
+<span class="inline-block px-2 py-1 bg-[#8B5E3C] text-white font-label-sm text-label-sm rounded-full tracking-wider">AMAPIANO</span>
+<button class="w-10 h-10 rounded-full bg-surface-container/80 backdrop-blur text-on-surface flex items-center justify-center play-icon">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+<div class="mt-8 flex justify-between items-end">
+<div>
+<h3 class="font-headline-md font-headline-md text-on-surface mb-1">Pretoria Soul</h3>
+<p class="font-body-md text-label-sm text-on-surface-variant">DJ Maphorisa</p>
+</div>
+<span class="font-body-md text-secondary font-medium">$350</span>
+</div>
+</div>
+</div>
+<!-- Standard Beat Card -->
+<div class="group relative rounded-xl overflow-hidden bg-surface-container-low ghost-border aspect-square cursor-pointer play-btn-hover flex flex-col justify-end p-stack-md">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" data-alt="Minimalist still life of a vintage gold-plated studio microphone against a rich, dark textured concrete wall. High-end editorial lighting, deep shadows, modern heritage vibe." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAUKQF4qMiDzCkhogDuhnqqEZDUKRhE9InI-r0ueF6_WTPFbbVOn5M80SjT7iicYDva0DqYcMwsXtC41-PGNumuWlegMWSNvxTwQVIj7iTypSMiS6kaCxoIjgvN6CReheWH0h1lKG8pzAnt8c0PvSVHI53YZja2fx3FjG2d51VbV43PDxjR0pcCcU4Q1u0WNVtoE6c-cSJGRa8jJkzOWPzHm3akVbkT2p7GQIBc95lNBdl37L-GbRKg')">
+<div class="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent"></div>
+</div>
+<div class="relative z-10">
+<div class="flex justify-between items-start mb-auto">
+<span class="inline-block px-2 py-1 bg-[#8B5E3C] text-white font-label-sm text-label-sm rounded-full tracking-wider">R&amp;B</span>
+<button class="w-10 h-10 rounded-full bg-surface-container/80 backdrop-blur text-on-surface flex items-center justify-center play-icon">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+</div>
+<div class="mt-8 flex justify-between items-end">
+<div>
+<h3 class="font-headline-md font-headline-md text-on-surface mb-1">Midnight</h3>
+<p class="font-body-md text-label-sm text-on-surface-variant">Sarz</p>
+</div>
+<span class="font-body-md text-secondary font-medium">$200</span>
+</div>
+</div>
+</div>
+<!-- Track List View (Spans 2 cols on md/lg) -->
+<div class="md:col-span-2 lg:col-span-2 bg-surface-container-low rounded-xl ghost-border p-stack-md">
+<div class="flex justify-between items-center mb-stack-sm border-b border-outline-variant/15 pb-4">
+<h3 class="font-headline-md text-on-surface">Trending Loops</h3>
+<a class="text-secondary font-label-sm text-label-sm hover:underline" href="#">View All</a>
+</div>
+<div class="space-y-1">
+<!-- List Item 1 -->
+<div class="flex items-center justify-between p-3 rounded-lg hover:bg-surface-variant/30 transition-colors group cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded bg-surface-variant flex items-center justify-center relative overflow-hidden">
+<img class="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-30 transition-opacity" data-alt="Close up of a vinyl record spinning on a high-end turntable with a gold tonearm. Cinematic lighting highlighting the grooves." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCCyUDZZMEwwHoTIjF0mal9gIRz6BupKzn8LJnLmrXjzJ6tCuoaGpEKDfD1dzhWacouZtxMTaKsE_RONw-nAIRowMwc8Z48XYHuPkM99SUHncSkV_jj5CxjTFsw82ve8E0ajg6NsbeZR9ipHVyVvuXzC3e9S9Xetr6bYZKprnv5-nMT7D5CcJ4xOHd8WTxp1w8m0v-NxdLziIZSHiRvU8X0JLHq1NwWpmEysug-rq1hpE4cCw5rYR7n"/>
+<span class="material-symbols-outlined z-10 text-on-surface opacity-0 group-hover:opacity-100 transition-opacity" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+<div>
+<h4 class="font-body-md text-on-surface font-medium">Odogwu Bassline</h4>
+<p class="font-label-sm text-on-surface-variant">120 BPM • F# Minor</p>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="font-body-md text-on-surface-variant hidden md:block">0:15</span>
+<span class="font-body-md text-secondary">$15</span>
+<button class="text-on-surface-variant hover:text-secondary"><span class="material-symbols-outlined">add_shopping_cart</span></button>
+</div>
+</div>
+<div class="h-px bg-outline-variant/15 w-full"></div>
+<!-- List Item 2 -->
+<div class="flex items-center justify-between p-3 rounded-lg hover:bg-surface-variant/30 transition-colors group cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded bg-surface-variant flex items-center justify-center relative overflow-hidden">
+<img class="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-30 transition-opacity" data-alt="Abstract geometric shapes representing soundwaves in shades of muted gold and dark charcoal. Clean, editorial minimalism." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDFHE35hBWokbcZlmoqn_uIJTJVhtr4LRJpYuqAY5TKNyivYdUmHuBh1j72p2ROHn7ICpd6lnVTkYUkFfPg_3Q-VsJov56cOX8b4Jzvrc21cGyBOeEwOBX_FtwRRGLghNEMSP1_mlr6rBs83i01amWRsrsAcZxCafP_QTXjJUDN3Ee7uIisRRdg9f00fWhkrOXDOqrp6K350ttURpXsaidOfvO5rohJAcxpaKuFkgafSXvZsAJXyfkm"/>
+<span class="material-symbols-outlined z-10 text-on-surface opacity-0 group-hover:opacity-100 transition-opacity" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+<div>
+<h4 class="font-body-md text-on-surface font-medium">Log Drum Pack Vol 1</h4>
+<p class="font-label-sm text-on-surface-variant">112 BPM • C Major</p>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="font-body-md text-on-surface-variant hidden md:block">0:30</span>
+<span class="font-body-md text-secondary">$25</span>
+<button class="text-on-surface-variant hover:text-secondary"><span class="material-symbols-outlined">add_shopping_cart</span></button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Global Audio Player (Sticky Bottom) -->
+<div class="fixed bottom-0 left-0 w-full bg-surface-container-highest/95 backdrop-blur-md border-t border-outline-variant/15 z-50 h-20 md:h-24">
+<div class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop h-full flex items-center justify-between gap-4">
+<!-- Now Playing Info -->
+<div class="flex items-center gap-4 w-1/3 min-w-0">
+<div class="w-12 h-12 md:w-16 md:h-16 rounded overflow-hidden flex-shrink-0 relative">
+<img class="w-full h-full object-cover" data-alt="Cover art for an Afrobeats single featuring minimalist typography and a stylized silhouette of a dancer against a sunset gradient. Sophisticated editorial look." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVB6sqTb6wON0CgSD_CUt7L28vCMPryJBD0i7nsld9ms31bo6UwBRHDuYshKQvYNJux9kjYwzAtMIU4jMta_8E_CwcYckhUlhjAsQvV0leMAgDJs3A_af7Nqowq2qhNSeAh9mL6Maj_NCP_blZ-gebcDwN0HZg69tNlefLLvZRPuISsKLvRiR9hyzf0bgINQH2EQQx920-TQL-KkYQFPLXrfN0cWFZlaRzzxvXNOjAaq23TiLjwyh7"/>
+</div>
+<div class="truncate">
+<h4 class="font-body-md text-on-surface font-medium truncate">Lagos Nights</h4>
+<p class="font-label-sm text-on-surface-variant truncate">Kel-P</p>
+</div>
+<button class="hidden md:block text-on-surface-variant hover:text-secondary ml-2">
+<span class="material-symbols-outlined">favorite_border</span>
+</button>
+</div>
+<!-- Controls -->
+<div class="flex flex-col items-center justify-center flex-1 max-w-lg">
+<div class="flex items-center gap-4 md:gap-6 mb-1">
+<button class="text-on-surface-variant hover:text-on-surface hidden sm:block"><span class="material-symbols-outlined text-sm">shuffle</span></button>
+<button class="text-on-surface-variant hover:text-on-surface"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">skip_previous</span></button>
+<button class="w-10 h-10 md:w-12 md:h-12 rounded-full bg-on-surface text-surface flex items-center justify-center hover:scale-105 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">pause</span>
+</button>
+<button class="text-on-surface-variant hover:text-on-surface"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">skip_next</span></button>
+<button class="text-on-surface-variant hover:text-on-surface hidden sm:block"><span class="material-symbols-outlined text-sm">repeat</span></button>
+</div>
+<!-- Progress Bar -->
+<div class="w-full flex items-center gap-2 hidden md:flex">
+<span class="font-label-sm text-label-sm text-on-surface-variant w-8 text-right">1:24</span>
+<div class="flex-1 h-1 bg-surface-variant rounded-full relative overflow-hidden group cursor-pointer">
+<div class="absolute top-0 left-0 h-full bg-secondary w-1/3 group-hover:bg-secondary-fixed transition-colors"></div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant w-8">3:45</span>
+</div>
+</div>
+<!-- Actions -->
+<div class="w-1/3 flex justify-end items-center gap-4">
+<div class="hidden lg:flex items-center gap-2 w-32">
+<span class="material-symbols-outlined text-on-surface-variant text-sm">volume_up</span>
+<div class="flex-1 h-1 bg-surface-variant rounded-full relative cursor-pointer">
+<div class="absolute top-0 left-0 h-full bg-on-surface w-2/3"></div>
+</div>
+</div>
+<button class="hidden md:block bg-transparent border border-[#8B5E3C] text-on-surface font-label-sm px-4 py-2 rounded hover:bg-[#8B5E3C]/10 transition-colors whitespace-nowrap">
+                    Add to Cart - $500
+                </button>
+</div>
+</div>
+</div>
+</body></html>
